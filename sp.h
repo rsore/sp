@@ -1098,6 +1098,9 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     int close_out = 0;
     int close_err = 0;
 
+    BOOL success = 0;
+    SpString cmd_quoted = SP_ZERO_INIT;
+
     // Child ends of pipes that exist in the parent prior to CreateProcess; must be closed in parent after success/fail.
     HANDLE stdin_child_end  = NULL; int close_stdin_child_end  = 0;
     HANDLE stdout_child_end = NULL; int close_stdout_child_end = 0;
@@ -1192,21 +1195,21 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     PROCESS_INFORMATION proc_info;
     ZeroMemory(&proc_info, sizeof(PROCESS_INFORMATION));
 
-    SpString cmd_quoted = sp_win32_quote_cmd_(cmd);
+    cmd_quoted = sp_win32_quote_cmd_(cmd);
     SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows requires command line (incl NUL) < 32767 chars");
 
     SP_LOG_INFO(SP_STRING_FMT_STR(cmd_quoted), SP_STRING_FMT_ARG(cmd_quoted));
 
-    BOOL success = CreateProcessA(NULL,
-                                  cmd_quoted.buffer,
-                                  NULL,
-                                  NULL,
-                                  TRUE,
-                                  0,
-                                  NULL,
-                                  NULL,
-                                  &startup_info,
-                                  &proc_info);
+    success = CreateProcessA(NULL,
+                             cmd_quoted.buffer,
+                             NULL,
+                             NULL,
+                             TRUE,
+                             0,
+                             NULL,
+                             NULL,
+                             &startup_info,
+                             &proc_info);
 
     sp_string_free_(&cmd_quoted);
 
