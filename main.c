@@ -1,4 +1,4 @@
-#define SP_LOG_INFO(fmt, ...)  fprintf(stdout, "[INFO] " fmt "\n", __VA_ARGS__)
+#define SP_LOG_INFO(fmt, ...)  fprintf(stdout, "[INFO] "  fmt "\n", __VA_ARGS__)
 #define SP_LOG_ERROR(fmt, ...) fprintf(stderr, "[ERROR] " fmt "\n", __VA_ARGS__)
 #define SP_IMPLEMENTATION
 #define SPDEF static inline
