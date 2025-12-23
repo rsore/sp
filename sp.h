@@ -101,11 +101,10 @@
 extern "C" {
 #endif
 
-// Dynamic array
 typedef struct {
-    char *buffer;
-    size_t size;
-    size_t capacity;
+    char   *buffer;
+    size_t  size;
+    size_t  capacity;
 } SpString;
 
 // Dynamic array
@@ -115,12 +114,46 @@ typedef struct {
     size_t    capacity;
 } SpStrings;
 
+typedef enum {
+    SP_REDIR_INHERIT = 0,   // use parent's std handle
+    SP_REDIR_NULL,          // /dev/null or NUL, no output
+    SP_REDIR_FILE,          // path-based file
+    SP_REDIR_PIPE,          // create pipe (parent keeps one end)
+    SP_REDIR_TO_STDOUT,     // merge stderr into stdout
+} SpRedirKind;
+
+typedef enum {
+    SP_FILE_READ = 0,       // for stdin
+    SP_FILE_WRITE_TRUNC,    // for stdout/stderr
+    SP_FILE_WRITE_APPEND    // for stdout/stderr
+} SpFileMode;
+
+typedef struct {
+    SpRedirKind kind;
+    union {
+        struct {
+            SpString   path;
+            SpFileMode mode;
+        } file;
+
+        struct {
+            int reserved[2];
+        } pipe;
+    } as;
+} SpRedirect;
+
+typedef struct {
+    SpRedirect stdin_redir;
+    SpRedirect stdout_redir;
+    SpRedirect stderr_redir;
+} SpStdio;
+
 // Command builder
 typedef struct {
     SpStrings args;
+    size_t internal_strings_already_initted; // We reuse allocated strings after cmd_reset
 
-    // We reuse allocated strings after cmd_reset
-    size_t internal_strings_already_initted;
+    SpStdio stdio;
 } SpCmd;
 
 // Dynamic array
@@ -145,14 +178,26 @@ typedef struct {
 } SpProcs;
 
 
-
 // Adds arg to cmd, may allocate memory
 SPDEF void sp_cmd_add_arg(SpCmd *cmd, const char *arg) SP_NOEXCEPT;
+
+// Redirection of stdout, stderr and stdin. Call these to configure cmd *before*
+// calling any exec function. Default behavior is subprocess inherits stdio
+// of calling process.
+SPDEF void sp_cmd_redirect_stdin_null(SpCmd *cmd) SP_NOEXCEPT;
+SPDEF void sp_cmd_redirect_stdin_from_file(SpCmd *cmd, const char *path) SP_NOEXCEPT;
+SPDEF void sp_cmd_redirect_stdout_null(SpCmd *cmd) SP_NOEXCEPT;
+SPDEF void sp_cmd_redirect_stdout_to_file(SpCmd *cmd, const char *path, SpFileMode mode) SP_NOEXCEPT; // mode: TRUNC/APPEND
+SPDEF void sp_cmd_redirect_stderr_null(SpCmd *cmd) SP_NOEXCEPT;
+SPDEF void sp_cmd_redirect_stderr_to_file(SpCmd *cmd, const char *path, SpFileMode mode) SP_NOEXCEPT; // mode: TRUNC/APPEND
+SPDEF void sp_cmd_redirect_stderr_to_stdout(SpCmd *cmd) SP_NOEXCEPT; // merge 2>&1
+
 // Run cmd asynchronously in a subprocess, returns process handle.
 // Must manually sp_proc_wait() for it later.
 SP_NODISCARD SPDEF SpProc sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT;
 // Run cmd synchronously in a subprocess, returns exit code of subprocess
 SPDEF int sp_cmd_exec_sync(SpCmd *cmd) SP_NOEXCEPT;
+
 // Resets to no args, but does not free underlying memory
 SPDEF void sp_cmd_reset(SpCmd *cmd) SP_NOEXCEPT;
 // Resets cmd, and frees underlying memory
@@ -182,6 +227,8 @@ SPDEF int sp_proc_wait(SpProc *proc) SP_NOEXCEPT;
 #  error "Unsupported platform for `sp.h`"
 #endif
 
+
+#include <stdio.h>
 
 #if SP_WINDOWS
 #  define WIN32_LEAN_AND_MEAN
@@ -359,6 +406,31 @@ sp_string_free_(SpString *str)
     sp_darray_free_(str);
 }
 
+static inline SpString
+sp_sprint(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int need = vsnprintf(NULL, 0, fmt, args);
+    va_end(args);
+    if (need < 0) {
+        SpString result = SP_ZERO_INIT;
+        return result;
+    }
+
+    char *buffer = (char *)SP_REALLOC(NULL, (size_t)need+1);
+
+    va_start(args, fmt);
+    vsnprintf(buffer, (size_t)need + 1, fmt, args);
+    buffer[(size_t)need] = '\0';
+    va_end(args);
+
+    SpString result = SP_ZERO_INIT;
+    sp_string_append_cstr_(&result, buffer);
+
+    return result;
+}
+
 static inline void
 sp_proc_handle_store_by_bytes_(SpProc     *proc,
                                const void *value,
@@ -387,11 +459,52 @@ sp_proc_is_valid_(const SpProc* proc)
     return proc && proc->handle_size != 0;
 }
 
+static inline void
+sp_redirect_set_file_(SpRedirect *r,
+                      const char *path,
+                      SpFileMode  mode)
+{
+    SP_ASSERT(r);
+    SP_ASSERT(path);
+
+    // Initialize or reuse owned storage for the file path.
+    if (r->as.file.path.buffer) {
+        sp_string_replace_content_(&r->as.file.path, path);
+    } else {
+        r->as.file.path = sp_string_make_(path);
+    }
+
+    r->as.file.mode = mode;
+    r->kind = SP_REDIR_FILE;
+}
+
+static inline void
+sp_redirect_reset_keep_alloc_(SpRedirect *r)
+{
+    // Reset to default while keeping any allocated file-path buffer for reuse.
+    if (r->as.file.path.buffer) {
+        sp_string_clear_(&r->as.file.path);
+        // mode can be left as-is. it’s irrelevant anyway unless kind==SP_REDIR_FILE
+    }
+    r->kind = SP_REDIR_INHERIT;
+}
+
+static inline void
+sp_redirect_free_alloc_(SpRedirect *r)
+{
+    if (r->as.file.path.buffer) {
+        sp_string_free_(&r->as.file.path);
+    }
+    memset(r, 0, sizeof(*r));
+}
+
 
 SPDEF void
 sp_cmd_add_arg(SpCmd      *cmd,
                const char *arg) SP_NOEXCEPT
 {
+    SP_ASSERT(cmd);
+
     if (cmd->args.size < cmd->internal_strings_already_initted) {
         sp_string_replace_content_(&cmd->args.buffer[cmd->args.size++], arg);
     } else {
@@ -401,9 +514,71 @@ sp_cmd_add_arg(SpCmd      *cmd,
     }
 }
 
+SPDEF void
+sp_cmd_redirect_stdin_null(SpCmd *cmd) SP_NOEXCEPT
+{
+    SP_ASSERT(cmd);
+
+    cmd->stdio.stdin_redir.kind = SP_REDIR_NULL;
+}
+
+SPDEF void
+sp_cmd_redirect_stdin_from_file(SpCmd *cmd, const char *path) SP_NOEXCEPT
+{
+    SP_ASSERT(cmd);
+
+    sp_redirect_set_file_(&cmd->stdio.stdin_redir, path, SP_FILE_READ);
+}
+
+SPDEF void
+sp_cmd_redirect_stdout_null(SpCmd *cmd) SP_NOEXCEPT
+{
+    SP_ASSERT(cmd);
+
+    cmd->stdio.stdout_redir.kind = SP_REDIR_NULL;
+}
+
+SPDEF void
+sp_cmd_redirect_stdout_to_file(SpCmd *cmd, const char *path, SpFileMode mode) SP_NOEXCEPT
+{
+    SP_ASSERT(cmd);
+    // stdout must be write mode
+    SP_ASSERT(mode == SP_FILE_WRITE_TRUNC || mode == SP_FILE_WRITE_APPEND);
+
+    sp_redirect_set_file_(&cmd->stdio.stdout_redir, path, mode);
+}
+
+SPDEF void
+sp_cmd_redirect_stderr_null(SpCmd *cmd) SP_NOEXCEPT
+{
+    SP_ASSERT(cmd);
+
+    cmd->stdio.stderr_redir.kind = SP_REDIR_NULL;
+}
+
+SPDEF void
+sp_cmd_redirect_stderr_to_file(SpCmd *cmd, const char *path, SpFileMode mode) SP_NOEXCEPT
+{
+    SP_ASSERT(cmd);
+    // stderr must be write mode
+    SP_ASSERT(mode == SP_FILE_WRITE_TRUNC || mode == SP_FILE_WRITE_APPEND);
+
+    sp_redirect_set_file_(&cmd->stdio.stderr_redir, path, mode);
+}
+
+SPDEF void
+sp_cmd_redirect_stderr_to_stdout(SpCmd *cmd) SP_NOEXCEPT
+{
+    SP_ASSERT(cmd);
+
+    cmd->stdio.stderr_redir.kind = SP_REDIR_TO_STDOUT;
+}
+
 SPDEF int
 sp_cmd_exec_sync(SpCmd *cmd) SP_NOEXCEPT
 {
+    SP_ASSERT(cmd);
+
     SpProc proc = sp_cmd_exec_async(cmd);
     int exit_code = sp_proc_wait(&proc);
     return exit_code;
@@ -412,43 +587,31 @@ sp_cmd_exec_sync(SpCmd *cmd) SP_NOEXCEPT
 SPDEF void
 sp_cmd_reset(SpCmd *cmd) SP_NOEXCEPT
 {
+    SP_ASSERT(cmd);
+
     cmd->args.size = 0;
+
+    sp_redirect_reset_keep_alloc_(&cmd->stdio.stdin_redir);
+    sp_redirect_reset_keep_alloc_(&cmd->stdio.stdout_redir);
+    sp_redirect_reset_keep_alloc_(&cmd->stdio.stderr_redir);
 }
 
 SPDEF void
 sp_cmd_free(SpCmd *cmd) SP_NOEXCEPT
 {
+    SP_ASSERT(cmd);
+
     for (size_t i = 0; i < cmd->internal_strings_already_initted; ++i) {
         sp_string_free_(&cmd->args.buffer[i]);
     }
     sp_darray_free_(&cmd->args);
     cmd->internal_strings_already_initted = 0;
+
+    sp_redirect_free_alloc_(&cmd->stdio.stdin_redir);
+    sp_redirect_free_alloc_(&cmd->stdio.stdout_redir);
+    sp_redirect_free_alloc_(&cmd->stdio.stderr_redir);
 }
 
-static inline SpString
-sp_sprint(const char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    int need = vsnprintf(NULL, 0, fmt, args);
-    va_end(args);
-    if (need < 0) {
-        SpString result = SP_ZERO_INIT;
-        return result;
-    }
-
-    char *buffer = (char *)SP_REALLOC(NULL, (size_t)need+1);
-
-    va_start(args, fmt);
-    vsnprintf(buffer, (size_t)need + 1, fmt, args);
-    buffer[(size_t)need] = '\0';
-    va_end(args);
-
-    SpString result = SP_ZERO_INIT;
-    sp_string_append_cstr_(&result, buffer);
-
-    return result;
-}
 
 /**
  * Windows implementation follows
@@ -459,7 +622,8 @@ sp_sprint(const char *fmt, ...)
 typedef char sp_native_fits_handle_[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
 
 static inline void
-sp_proc_set_handle_(SpProc* proc, HANDLE handle)
+sp_proc_set_handle_(SpProc *proc,
+                    HANDLE  handle)
 {
   sp_proc_handle_store_by_bytes_(proc, &handle, sizeof(handle));
 }
@@ -576,52 +740,283 @@ sp_win32_strerror(DWORD err)
     return sp_string_make_(win32_error_message);
 }
 
+static inline void
+sp_win32_log_last_error_(const char *context)
+{
+    DWORD err = GetLastError();
+    SpString msg = sp_win32_strerror(err);
+    SP_LOG_ERROR("%s: %s", context, msg.buffer);
+    sp_string_free_(&msg);
+}
+
+static inline HANDLE
+sp_win32_open_inheritable_file_(const char *path,
+                                DWORD       desired_access,
+                                DWORD       creation_disposition)
+{
+    SECURITY_ATTRIBUTES sa;
+    ZeroMemory(&sa, sizeof(sa));
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+
+    // Share broadly
+    DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+
+    HANDLE h = CreateFileA(path,
+                           desired_access,
+                           share,
+                           &sa,
+                           creation_disposition,
+                           FILE_ATTRIBUTE_NORMAL,
+                           NULL);
+    return h;
+}
+
+static inline HANDLE
+sp_win32_open_inheritable_null_(DWORD desired_access)
+{
+    // NUL is the Windows null device
+    return sp_win32_open_inheritable_file_("NUL", desired_access, OPEN_EXISTING);
+}
+
+static inline int
+sp_win32_seek_to_end_(HANDLE h)
+{
+    LARGE_INTEGER zero;
+    zero.QuadPart = 0;
+
+    // FILE_END seeks relative to end.
+    if (!SetFilePointerEx(h, zero, NULL, FILE_END)) {
+        return 0;
+    }
+    return 1;
+}
+
+static inline int
+sp_win32_apply_redir_(const SpRedirect *r,
+                      int               is_stdin,
+                      HANDLE           *out_handle,
+                      int              *out_should_close)
+{
+    SP_ASSERT(r);
+    SP_ASSERT(out_handle);
+    SP_ASSERT(out_should_close);
+
+    *out_should_close = 0;
+
+    switch (r->kind) {
+    case SP_REDIR_INHERIT:
+        *out_handle = GetStdHandle(is_stdin ? STD_INPUT_HANDLE : STD_OUTPUT_HANDLE);
+        return (*out_handle != NULL && *out_handle != INVALID_HANDLE_VALUE);
+
+    case SP_REDIR_NULL: {
+        DWORD access = is_stdin ? GENERIC_READ : GENERIC_WRITE;
+        HANDLE h = sp_win32_open_inheritable_null_(access);
+        if (h == INVALID_HANDLE_VALUE) return 0;
+        *out_handle = h;
+        *out_should_close = 1;
+        return 1;
+    }
+
+    case SP_REDIR_FILE: {
+        const char *path = r->as.file.path.buffer ? r->as.file.path.buffer : "";
+        if (is_stdin) {
+            // stdin: read from file
+            HANDLE h = sp_win32_open_inheritable_file_(path, GENERIC_READ, OPEN_EXISTING);
+            if (h == INVALID_HANDLE_VALUE) return 0;
+            *out_handle = h;
+            *out_should_close = 1;
+            return 1;
+        } else {
+            // stdout/stderr: write to file
+            if (r->as.file.mode == SP_FILE_WRITE_TRUNC) {
+                HANDLE h = sp_win32_open_inheritable_file_(path, GENERIC_WRITE, CREATE_ALWAYS);
+                if (h == INVALID_HANDLE_VALUE) return 0;
+                *out_handle = h;
+                *out_should_close = 1;
+                return 1;
+            } else if (r->as.file.mode == SP_FILE_WRITE_APPEND) {
+                HANDLE h = sp_win32_open_inheritable_file_(path, FILE_APPEND_DATA, OPEN_ALWAYS);
+                if (h == INVALID_HANDLE_VALUE) return 0;
+                (void)sp_win32_seek_to_end_(h);
+                *out_handle = h;
+                *out_should_close = 1;
+                return 1;
+            } else {
+                SP_ASSERT(0 && "sp: Invalid mode for output");
+                SetLastError(ERROR_INVALID_PARAMETER);
+                return 0;
+            }
+        }
+    }
+
+    case SP_REDIR_TO_STDOUT:
+        // Not applied here; handled after stdout is resolved.
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return 0;
+
+    case SP_REDIR_PIPE:
+        // TODO: Not supported
+        return 0;
+    }
+
+    return 0;
+}
+
 SPDEF SpProc
 sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
 {
+    SP_ASSERT(cmd);
+
     STARTUPINFO startup_info;
     ZeroMemory(&startup_info, sizeof(STARTUPINFO));
-    startup_info.cb          = sizeof(STARTUPINFO);
-    startup_info.hStdError   = GetStdHandle(STD_ERROR_HANDLE);  // TODO: Support custom file handles
-    startup_info.hStdOutput  = GetStdHandle(STD_OUTPUT_HANDLE); // TODO: Support custom file handles
-    startup_info.hStdInput   = GetStdHandle(STD_INPUT_HANDLE);  // TODO: Support custom file handles
-    startup_info.dwFlags    |= STARTF_USESTDHANDLES;
+    startup_info.cb       = sizeof(STARTUPINFO);
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+
+    HANDLE h_in  = NULL;
+    HANDLE h_out = NULL;
+    HANDLE h_err = NULL;
+
+    int close_in  = 0;
+    int close_out = 0;
+    int close_err = 0;
+
+    // Resolve stdin
+    if (!sp_win32_apply_redir_(&cmd->stdio.stdin_redir, 1, &h_in, &close_in)) {
+        sp_win32_log_last_error_("Failed to apply stdin redirection");
+        goto fail;
+    }
+
+    // Resolve stdout
+    if (!sp_win32_apply_redir_(&cmd->stdio.stdout_redir, 0, &h_out, &close_out)) {
+        sp_win32_log_last_error_("Failed to apply stdout redirection");
+        goto fail;
+    }
+
+    // Resolve stderr
+    if (cmd->stdio.stderr_redir.kind == SP_REDIR_TO_STDOUT) {
+        // Merge stderr into stdout
+        h_err     = h_out;
+        close_err = 0;
+    } else {
+        // stderr behaves like stdout for inherit/null/file
+        // We reuse apply_redir but need the correct inherited handle when kind==INHERIT:
+        // apply_redir uses STD_OUTPUT_HANDLE for "not stdin", so for stderr INHERIT we override.
+        if (cmd->stdio.stderr_redir.kind == SP_REDIR_INHERIT) {
+            h_err = GetStdHandle(STD_ERROR_HANDLE);
+            if (h_err == NULL || h_err == INVALID_HANDLE_VALUE) {
+                sp_win32_log_last_error_("GetStdHandle(STD_ERROR_HANDLE) failed");
+                goto fail;
+            }
+        } else {
+            if (!sp_win32_apply_redir_(&cmd->stdio.stderr_redir, 0, &h_err, &close_err)) {
+                sp_win32_log_last_error_("Failed to apply stderr redirection");
+                goto fail;
+            }
+        }
+    }
+
+    startup_info.hStdInput  = h_in;
+    startup_info.hStdOutput = h_out;
+    startup_info.hStdError  = h_err;
 
     PROCESS_INFORMATION proc_info;
     ZeroMemory(&proc_info, sizeof(PROCESS_INFORMATION));
 
     SpString cmd_quoted = sp_win32_quote_cmd_(cmd);
-    SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows sets the requirement that the command to be executed, including NUL-terminator, be less than 32767 long");
+    SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows requires command line (incl NUL) < 32767 chars");
 
     SP_LOG_INFO(SP_STRING_FMT_STR(cmd_quoted), SP_STRING_FMT_ARG(cmd_quoted));
 
-    BOOL success = CreateProcessA(NULL,              // lpApplicationName,
-                                  cmd_quoted.buffer, // lpCommandLine (SpString is NUL-terminated for cstr compatibility)
-                                  NULL,              // lpProcessAttributes,
-                                  NULL,              // lpThreadAttributes,
-                                  TRUE,              // bInheritHandles,
-                                  0,                 // dwCreationFlags,
-                                  NULL,              // lpEnvironment,
-                                  NULL,              // lpCurrentDirectory,
-                                  &startup_info,     // lpStartupInfo,
-                                  &proc_info);       //lpProcessInformation
+    BOOL success = CreateProcessA(NULL,              // lpApplicationName
+                                  cmd_quoted.buffer, // lpCommandLine
+                                  NULL,              // lpProcessAttributes
+                                  NULL,              // lpThreadAttributes
+                                  TRUE,              // bInheritHandles (must be TRUE for STARTF_USESTDHANDLES)
+                                  0,                 // dwCreationFlags
+                                  NULL,              // lpEnvironment
+                                  NULL,              // lpCurrentDirectory
+                                  &startup_info,     // lpStartupInfo
+                                  &proc_info);       // lpProcessInformation
+
+    sp_string_free_(&cmd_quoted);
+
     if (!success) {
-        SpString error_message = sp_win32_strerror(GetLastError());
-        SP_LOG_ERROR("Failed to create child process for %s: %s",
-                     cmd->args.buffer[0].buffer,
-                     error_message.buffer);
-        sp_string_free_(&error_message);
+        sp_win32_log_last_error_("CreateProcessA failed");
+        goto fail;
+    }
+
+    // Parent no longer needs these handles; child inherited them (or they were the std handles).
+    if (close_in)  CloseHandle(h_in);
+    if (close_out) CloseHandle(h_out);
+    if (close_err) CloseHandle(h_err);
+
+    CloseHandle(proc_info.hThread);
+    {
         SpProc proc = SP_ZERO_INIT;
-        SP_ASSERT(sp_proc_is_valid_(&proc) == 0 && "sp implementation error, empty SpProc should be invalid");
+        sp_proc_set_handle_(&proc, proc_info.hProcess);
         return proc;
     }
 
-    CloseHandle(proc_info.hThread);
+fail:
+    if (close_in && h_in && h_in != INVALID_HANDLE_VALUE) CloseHandle(h_in);
+    if (close_out && h_out && h_out != INVALID_HANDLE_VALUE) CloseHandle(h_out);
+    if (close_err && h_err && h_err != INVALID_HANDLE_VALUE) CloseHandle(h_err);
 
-    SpProc proc = SP_ZERO_INIT;
-    sp_proc_set_handle_(&proc, proc_info.hProcess);
-    return proc;
+    {
+        SpProc proc = SP_ZERO_INIT;
+        SP_ASSERT(sp_proc_is_valid_(&proc) == 0);
+        return proc;
+    }
 }
+
+
+/* SPDEF SpProc */
+/* sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT */
+/* { */
+/*     STARTUPINFO startup_info; */
+/*     ZeroMemory(&startup_info, sizeof(STARTUPINFO)); */
+/*     startup_info.cb          = sizeof(STARTUPINFO); */
+/*     startup_info.hStdError   = GetStdHandle(STD_ERROR_HANDLE);  // TODO: Support custom file handles */
+/*     startup_info.hStdOutput  = GetStdHandle(STD_OUTPUT_HANDLE); // TODO: Support custom file handles */
+/*     startup_info.hStdInput   = GetStdHandle(STD_INPUT_HANDLE);  // TODO: Support custom file handles */
+/*     startup_info.dwFlags    |= STARTF_USESTDHANDLES; */
+
+/*     PROCESS_INFORMATION proc_info; */
+/*     ZeroMemory(&proc_info, sizeof(PROCESS_INFORMATION)); */
+
+/*     SpString cmd_quoted = sp_win32_quote_cmd_(cmd); */
+/*     SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows sets the requirement that the command to be executed, including NUL-terminator, be less than 32767 long"); */
+
+/*     SP_LOG_INFO(SP_STRING_FMT_STR(cmd_quoted), SP_STRING_FMT_ARG(cmd_quoted)); */
+
+/*     BOOL success = CreateProcessA(NULL,              // lpApplicationName, */
+/*                                   cmd_quoted.buffer, // lpCommandLine (SpString is NUL-terminated for cstr compatibility) */
+/*                                   NULL,              // lpProcessAttributes, */
+/*                                   NULL,              // lpThreadAttributes, */
+/*                                   TRUE,              // bInheritHandles, */
+/*                                   0,                 // dwCreationFlags, */
+/*                                   NULL,              // lpEnvironment, */
+/*                                   NULL,              // lpCurrentDirectory, */
+/*                                   &startup_info,     // lpStartupInfo, */
+/*                                   &proc_info);       //lpProcessInformation */
+/*     if (!success) { */
+/*         SpString error_message = sp_win32_strerror(GetLastError()); */
+/*         SP_LOG_ERROR("Failed to create child process for %s: %s", */
+/*                      cmd->args.buffer[0].buffer, */
+/*                      error_message.buffer); */
+/*         sp_string_free_(&error_message); */
+/*         SpProc proc = SP_ZERO_INIT; */
+/*         SP_ASSERT(sp_proc_is_valid_(&proc) == 0 && "sp implementation error, empty SpProc should be invalid"); */
+/*         return proc; */
+/*     } */
+
+/*     CloseHandle(proc_info.hThread); */
+
+/*     SpProc proc = SP_ZERO_INIT; */
+/*     sp_proc_set_handle_(&proc, proc_info.hProcess); */
+/*     return proc; */
+/* } */
 
 SPDEF int
 sp_proc_wait(SpProc *proc) SP_NOEXCEPT
