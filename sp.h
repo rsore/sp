@@ -275,47 +275,37 @@ SPDEF int sp_proc_wait(SpProc *proc) SP_NOEXCEPT;
  *   } Ts;
  */
 #ifdef __cplusplus
-#define SP_DARRAY_NEW_BUFFER_TYPE_(arr) decltype((arr)->buffer)
+#define SP_DARRAY_NEW_BUFFER_TYPE(arr) decltype((arr)->buffer)
 #else
-#define SP_DARRAY_NEW_BUFFER_TYPE_(arr) void*
+#define SP_DARRAY_NEW_BUFFER_TYPE(arr) void*
 #endif
-#define sp_darray_grow_to_fit_(arr, new_capacity)                       \
-    do {                                                                \
-        if ((new_capacity) <= (arr)->capacity) break;                   \
-        size_t sp_darray_new_capacity_ = (arr)->capacity ? (arr)->capacity * 2 : 16; \
-        while (sp_darray_new_capacity_ < (new_capacity)) sp_darray_new_capacity_ *= 2; \
-        const size_t sp_alloc_size_ = sp_darray_new_capacity_ * sizeof(*(arr)->buffer); \
-        SP_DARRAY_NEW_BUFFER_TYPE_(arr) sp_new_buffer_ = (SP_DARRAY_NEW_BUFFER_TYPE_(arr))SP_REALLOC((arr)->buffer, sp_alloc_size_); \
-        SP_ASSERT(sp_new_buffer_);                                    \
-        (arr)->buffer = sp_new_buffer_;                                \
-        (arr)->capacity = sp_darray_new_capacity_;                     \
+#define sp_darray_grow_to_fit(arr, new_capacity)                                                                                 \
+    do {                                                                                                                         \
+        if ((new_capacity) <= (arr)->capacity) break;                                                                            \
+        size_t sp_darray_new_capacity = (arr)->capacity ? (arr)->capacity * 2 : 16;                                              \
+        while (sp_darray_new_capacity < (new_capacity)) sp_darray_new_capacity *= 2;                                             \
+        const size_t sp_alloc_size = sp_darray_new_capacity * sizeof(*(arr)->buffer);                                            \
+        SP_DARRAY_NEW_BUFFER_TYPE(arr) sp_new_buffer = (SP_DARRAY_NEW_BUFFER_TYPE(arr))SP_REALLOC((arr)->buffer, sp_alloc_size); \
+        SP_ASSERT(sp_new_buffer);                                                                                                \
+        (arr)->buffer = sp_new_buffer;                                                                                           \
+        (arr)->capacity = sp_darray_new_capacity;                                                                                \
     } while (0)
 
-#define sp_darray_append_(arr, new_element)             \
-    do {                                                \
-        sp_darray_grow_to_fit_((arr), (arr)->size+1);   \
-        (arr)->buffer[(arr)->size++] = (new_element);   \
+#define sp_darray_append(arr, new_element)                                                                                       \
+    do {                                                                                                                         \
+        sp_darray_grow_to_fit((arr), (arr)->size+1);                                                                             \
+        (arr)->buffer[(arr)->size++] = (new_element);                                                                            \
     } while (0)
 
-#define sp_darray_free_(arr)                                            \
-    do {                                                                \
-        if ((arr)->buffer) SP_FREE((arr)->buffer);                     \
-        (arr)->buffer = NULL; (arr)->capacity = 0; (arr)->size = 0;     \
-    } while (0)
-
-#define sp_darray_foreach_(arr, type, it)                               \
-    for (type *it = (arr)->buffer; it < (arr)->buffer+(arr)->size; ++it)
-
-#define sp_darray_copy_(src, dest)                                      \
-    do {                                                                \
-        sp_darray_grow_to_fit_((dest), (src)->size);                    \
-        memcpy((dest)->buffer, (src)->buffer, (src)->size * sizeof(*(src)->buffer)); \
-        (dest)->size = (src)->size;                                     \
+#define sp_darray_free(arr)                                                                                                      \
+    do {                                                                                                                         \
+        if ((arr)->buffer) SP_FREE((arr)->buffer);                                                                               \
+        (arr)->buffer = NULL; (arr)->capacity = 0; (arr)->size = 0;                                                              \
     } while (0)
 
 
 static inline char *
-sp_strdup_(const char *str)
+sp_strdup(const char *str)
 {
     size_t len = strlen(str);
     char *buf = (char *)SP_REALLOC(NULL, len+1);
@@ -329,74 +319,74 @@ sp_strdup_(const char *str)
 #define SP_STRING_FMT_ARG(str) (int)(str).size, (str).buffer
 
 static inline void
-sp_string_ensure_null_(SpString *str)
+sp_string_ensure_null(SpString *str)
 {
-    sp_darray_grow_to_fit_(str, str->size + 1);
+    sp_darray_grow_to_fit(str, str->size + 1);
     str->buffer[str->size] = '\0';
 }
 
 static inline SpString
-sp_string_make_(const char *c_str)
+sp_string_make(const char *c_str)
 {
     SpString str = SP_ZERO_INIT;
     size_t len = strlen(c_str);
 
-    str.buffer = sp_strdup_(c_str);
+    str.buffer = sp_strdup(c_str);
     SP_ASSERT(str.buffer);
 
     str.size = len;
     str.capacity = len;
 
-    sp_string_ensure_null_(&str);
+    sp_string_ensure_null(&str);
 
     return str;
 }
 
 static inline void
-sp_string_replace_content_(SpString   *str,
-                           const char *new_content)
+sp_string_replace_content(SpString   *str,
+                          const char *new_content)
 {
     size_t new_len = strlen(new_content);
 
-    sp_darray_grow_to_fit_(str, new_len + 1);
+    sp_darray_grow_to_fit(str, new_len + 1);
     memcpy(str->buffer, new_content, new_len);
     str->size = new_len;
     str->buffer[str->size] = '\0';
 }
 
 static inline void
-sp_string_append_char_(SpString *str,
-                       char      c)
+sp_string_append_char(SpString *str,
+                      char      c)
 {
-    sp_darray_grow_to_fit_(str, str->size + 2);
+    sp_darray_grow_to_fit(str, str->size + 2);
     str->buffer[str->size++] = c;
     str->buffer[str->size] = '\0';
 }
 
 static inline void
-sp_string_append_cstr_(SpString   *str,
-                       const char *cstr)
+sp_string_append_cstr(SpString   *str,
+                      const char *cstr)
 {
     size_t len = strlen(cstr);
-    sp_darray_grow_to_fit_(str, str->size + len + 1);
+    sp_darray_grow_to_fit(str, str->size + len + 1);
     memcpy(str->buffer + str->size, cstr, len);
     str->size += len;
     str->buffer[str->size] = '\0';
 }
 
 static inline void
-sp_string_append_string_(SpString       *str,
-                         const SpString *to_append)
+sp_string_append_string(SpString       *str,
+                        const SpString *to_append)
 {
-    sp_darray_grow_to_fit_(str, str->size + to_append->size + 1);
+    sp_darray_grow_to_fit(str, str->size + to_append->size + 1);
     memcpy(str->buffer + str->size, to_append->buffer, to_append->size);
     str->size += to_append->size;
     str->buffer[str->size] = '\0';
 }
 
 static inline int
-sp_string_contains_any_(const SpString *s,
-                        const char     *chars)
+sp_string_contains_any(const SpString *s,
+                       const char     *chars)
 {
     const char *buf = s->buffer ? s->buffer : "";
     size_t len = s->size;
@@ -411,16 +401,16 @@ sp_string_contains_any_(const SpString *s,
 }
 
 static inline void
-sp_string_clear_(SpString *str)
+sp_string_clear(SpString *str)
 {
     str->size = 0;
     if (str->buffer) str->buffer[0] = '\0';
 }
 
 static inline void
-sp_string_free_(SpString *str)
+sp_string_free(SpString *str)
 {
-    sp_darray_free_(str);
+    sp_darray_free(str);
 }
 
 static inline SpString
@@ -443,15 +433,15 @@ sp_sprint(const char *fmt, ...)
     va_end(args);
 
     SpString result = SP_ZERO_INIT;
-    sp_string_append_cstr_(&result, buffer);
+    sp_string_append_cstr(&result, buffer);
 
     return result;
 }
 
 static inline void
-sp_proc_handle_store_by_bytes_(SpProc     *proc,
-                               const void *value,
-                               size_t      value_size)
+sp_proc_handle_store_by_bytes(SpProc     *proc,
+                              const void *value,
+                              size_t      value_size)
 {
     SP_ASSERT(proc && value);
     SP_ASSERT(value_size <= SP_NATIVE_MAX);
@@ -460,18 +450,17 @@ sp_proc_handle_store_by_bytes_(SpProc     *proc,
 }
 
 static inline void
-sp_proc_handle_load_by_bytes_(const SpProc *proc,
-                              void         *out,
-                              size_t        out_size)
+sp_proc_handle_load_by_bytes(const SpProc *proc,
+                             void         *out,
+                             size_t        out_size)
 {
     SP_ASSERT(proc && out);
     SP_ASSERT((size_t)proc->handle_size == out_size);
     memcpy(out, proc->handle, out_size);
 }
 
-
 static inline int
-sp_proc_is_valid_(const SpProc* proc)
+sp_proc_is_valid(const SpProc* proc)
 {
     return proc && proc->handle_size != 0;
 }
@@ -480,10 +469,10 @@ sp_proc_is_valid_(const SpProc* proc)
 typedef char sp_native_fits_pipe_[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
 
 static inline void
-sp_pipe_handle_store_by_bytes_(SpPipe     *p,
-                               const void *value,
-                               size_t      value_size,
-                               SpPipeMode  mode)
+sp_pipe_handle_store_by_bytes(SpPipe     *p,
+                              const void *value,
+                              size_t      value_size,
+                              SpPipeMode  mode)
 {
     SP_ASSERT(p && value);
     SP_ASSERT(value_size <= SP_NATIVE_MAX);
@@ -494,9 +483,9 @@ sp_pipe_handle_store_by_bytes_(SpPipe     *p,
 }
 
 static inline void
-sp_pipe_handle_load_by_bytes_(const SpPipe *p,
-                              void         *out,
-                              size_t        out_size)
+sp_pipe_handle_load_by_bytes(const SpPipe *p,
+                             void         *out,
+                             size_t        out_size)
 {
     SP_ASSERT(p && out);
     SP_ASSERT((size_t)p->handle_size == out_size);
@@ -505,23 +494,23 @@ sp_pipe_handle_load_by_bytes_(const SpPipe *p,
 }
 
 static inline int
-sp_pipe_is_valid_(const SpPipe *p)
+sp_pipe_is_valid(const SpPipe *p)
 {
     return p && p->handle_size != 0;
 }
 
 static inline void
-sp_redirect_set_file_(SpRedirect *r,
-                      const char *path,
-                      SpFileMode  mode)
+sp_redirect_set_file(SpRedirect *r,
+                     const char *path,
+                     SpFileMode  mode)
 {
     SP_ASSERT(r);
     SP_ASSERT(path);
 
     if (r->file_path.buffer) {
-        sp_string_replace_content_(&r->file_path, path);
+        sp_string_replace_content(&r->file_path, path);
     } else {
-        r->file_path = sp_string_make_(path);
+        r->file_path = sp_string_make(path);
     }
 
     r->file_mode = mode;
@@ -530,24 +519,23 @@ sp_redirect_set_file_(SpRedirect *r,
 }
 
 static inline void
-sp_redirect_reset_keep_alloc_(SpRedirect *r)
+sp_redirect_reset_keep_alloc(SpRedirect *r)
 {
     if (r->file_path.buffer) {
-        sp_string_clear_(&r->file_path);
+        sp_string_clear(&r->file_path);
     }
     r->out_pipe = NULL;
     r->kind = SP_REDIR_INHERIT;
 }
 
 static inline void
-sp_redirect_free_alloc_(SpRedirect *r)
+sp_redirect_free_alloc(SpRedirect *r)
 {
     if (r->file_path.buffer) {
-        sp_string_free_(&r->file_path);
+        sp_string_free(&r->file_path);
     }
     memset(r, 0, sizeof(*r));
 }
-
 
 static inline SpString
 sp_win32_strerror(DWORD err)
@@ -568,11 +556,11 @@ sp_win32_strerror(DWORD err)
     if (error_message_size == 0) {
         if (GetLastError() != ERROR_MR_MID_NOT_FOUND) {
             SpString result = sp_sprint("Could not get error message for 0x%lX", err);
-            if (result.buffer == NULL) return sp_string_make_("");
+            if (result.buffer == NULL) return sp_string_make("");
             return result;
         } else {
             SpString result = sp_sprint("Invalid Windows Error code (0x%lX)", err);
-            if (result.buffer == NULL) return sp_string_make_("");
+            if (result.buffer == NULL) return sp_string_make("");
             return result;
         }
     }
@@ -581,19 +569,17 @@ sp_win32_strerror(DWORD err)
         win32_error_message[--error_message_size] = '\0';
     }
 
-    return sp_string_make_(win32_error_message);
+    return sp_string_make(win32_error_message);
 }
 
 static inline void
-sp_win32_log_last_error_(const char *context)
+sp_win32_log_last_error(const char *context)
 {
     DWORD err = GetLastError();
     SpString msg = sp_win32_strerror(err);
     SP_LOG_ERROR("%s: %s", context, msg.buffer);
-    sp_string_free_(&msg);
+    sp_string_free(&msg);
 }
-
-
 
 SPDEF void
 sp_cmd_add_arg(SpCmd      *cmd,
@@ -602,10 +588,10 @@ sp_cmd_add_arg(SpCmd      *cmd,
     SP_ASSERT(cmd);
 
     if (cmd->args.size < cmd->internal_strings_already_initted) {
-        sp_string_replace_content_(&cmd->args.buffer[cmd->args.size++], arg);
+        sp_string_replace_content(&cmd->args.buffer[cmd->args.size++], arg);
     } else {
-        SpString str = sp_string_make_(arg);
-        sp_darray_append_(&cmd->args, str);
+        SpString str = sp_string_make(arg);
+        sp_darray_append(&cmd->args, str);
         cmd->internal_strings_already_initted += 1;
     }
 }
@@ -623,7 +609,7 @@ sp_cmd_redirect_stdin_from_file(SpCmd *cmd, const char *path) SP_NOEXCEPT
 {
     SP_ASSERT(cmd);
 
-    sp_redirect_set_file_(&cmd->stdio.stdin_redir, path, SP_FILE_READ);
+    sp_redirect_set_file(&cmd->stdio.stdin_redir, path, SP_FILE_READ);
 }
 
 SPDEF void
@@ -641,7 +627,7 @@ sp_cmd_redirect_stdout_to_file(SpCmd *cmd, const char *path, SpFileMode mode) SP
     // stdout must be write mode
     SP_ASSERT(mode == SP_FILE_WRITE_TRUNC || mode == SP_FILE_WRITE_APPEND);
 
-    sp_redirect_set_file_(&cmd->stdio.stdout_redir, path, mode);
+    sp_redirect_set_file(&cmd->stdio.stdout_redir, path, mode);
 }
 
 SPDEF void
@@ -659,7 +645,7 @@ sp_cmd_redirect_stderr_to_file(SpCmd *cmd, const char *path, SpFileMode mode) SP
     // stderr must be write mode
     SP_ASSERT(mode == SP_FILE_WRITE_TRUNC || mode == SP_FILE_WRITE_APPEND);
 
-    sp_redirect_set_file_(&cmd->stdio.stderr_redir, path, mode);
+    sp_redirect_set_file(&cmd->stdio.stderr_redir, path, mode);
 }
 
 SPDEF void
@@ -721,9 +707,9 @@ sp_cmd_reset(SpCmd *cmd) SP_NOEXCEPT
 
     cmd->args.size = 0;
 
-    sp_redirect_reset_keep_alloc_(&cmd->stdio.stdin_redir);
-    sp_redirect_reset_keep_alloc_(&cmd->stdio.stdout_redir);
-    sp_redirect_reset_keep_alloc_(&cmd->stdio.stderr_redir);
+    sp_redirect_reset_keep_alloc(&cmd->stdio.stdin_redir);
+    sp_redirect_reset_keep_alloc(&cmd->stdio.stdout_redir);
+    sp_redirect_reset_keep_alloc(&cmd->stdio.stderr_redir);
 }
 
 SPDEF void
@@ -732,14 +718,14 @@ sp_cmd_free(SpCmd *cmd) SP_NOEXCEPT
     SP_ASSERT(cmd);
 
     for (size_t i = 0; i < cmd->internal_strings_already_initted; ++i) {
-        sp_string_free_(&cmd->args.buffer[i]);
+        sp_string_free(&cmd->args.buffer[i]);
     }
-    sp_darray_free_(&cmd->args);
+    sp_darray_free(&cmd->args);
     cmd->internal_strings_already_initted = 0;
 
-    sp_redirect_free_alloc_(&cmd->stdio.stdin_redir);
-    sp_redirect_free_alloc_(&cmd->stdio.stdout_redir);
-    sp_redirect_free_alloc_(&cmd->stdio.stderr_redir);
+    sp_redirect_free_alloc(&cmd->stdio.stdin_redir);
+    sp_redirect_free_alloc(&cmd->stdio.stdout_redir);
+    sp_redirect_free_alloc(&cmd->stdio.stderr_redir);
 }
 
 
@@ -752,42 +738,42 @@ sp_cmd_free(SpCmd *cmd) SP_NOEXCEPT
 typedef char sp_native_fits_handle_[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
 
 static inline void
-sp_proc_set_handle_(SpProc *proc,
-                    HANDLE  handle)
+sp_proc_set_handle(SpProc *proc,
+                   HANDLE  handle)
 {
-  sp_proc_handle_store_by_bytes_(proc, &handle, sizeof(handle));
+  sp_proc_handle_store_by_bytes(proc, &handle, sizeof(handle));
 }
 
 static inline HANDLE
-sp_proc_get_handle_(SpProc* proc)
+sp_proc_get_handle(SpProc* proc)
 {
   HANDLE handle = NULL;
-  sp_proc_handle_load_by_bytes_(proc, &handle, sizeof(handle));
+  sp_proc_handle_load_by_bytes(proc, &handle, sizeof(handle));
   return handle;
 }
 
 static inline void
-sp_pipe_set_handle_(SpPipe     *p,
-                    HANDLE      h,
-                    SpPipeMode  mode)
+sp_pipe_set_handle(SpPipe     *p,
+                   HANDLE      h,
+                   SpPipeMode  mode)
 {
-    sp_pipe_handle_store_by_bytes_(p, &h, sizeof(h), mode);
+    sp_pipe_handle_store_by_bytes(p, &h, sizeof(h), mode);
 }
 
 static inline HANDLE
-sp_pipe_get_handle_(const SpPipe *p)
+sp_pipe_get_handle(const SpPipe *p)
 {
     HANDLE h = NULL;
-    sp_pipe_handle_load_by_bytes_(p, &h, sizeof(h));
+    sp_pipe_handle_load_by_bytes(p, &h, sizeof(h));
     return h;
 }
 
 /**
  * Windows command-line quoting for CreateProcess / CommandLineToArgvW.
- * Caller must sp_string_free_() the returned string.
+ * Caller must sp_string_free() the returned string.
  */
 static inline SpString
-sp_win32_quote_cmd_(const SpCmd *cmd)
+sp_win32_quote_cmd(const SpCmd *cmd)
 {
     SpString result = SP_ZERO_INIT;
 
@@ -796,22 +782,22 @@ sp_win32_quote_cmd_(const SpCmd *cmd)
         const char *s = argp->buffer ? argp->buffer : "";
         size_t len = argp->size;
 
-        if (i > 0) sp_string_append_char_(&result, ' ');
+        if (i > 0) sp_string_append_char(&result, ' ');
 
         // Need quotes if:
         //    - empty
         //    - contains whitespace (space/tab/nl/vtab) or a quote
         //    - or ends with a backslash
         int needs_quote = ((len == 0) ||
-                           sp_string_contains_any_(argp, " \t\n\v\"") ||
+                           sp_string_contains_any(argp, " \t\n\v\"") ||
                            (len > 0 && s[len - 1] == '\\'));
 
         if (!needs_quote) {
-            sp_string_append_string_(&result, argp);
+            sp_string_append_string(&result, argp);
             continue;
         }
 
-        sp_string_append_char_(&result, '\"');
+        sp_string_append_char(&result, '\"');
 
         // Count backslashes and emit them once we know what follows.
         size_t bs = 0;
@@ -827,34 +813,34 @@ sp_win32_quote_cmd_(const SpCmd *cmd)
             if (c == '\"') {
                 // Emit 2*bs backslashes, then one backslash to escape the quote.
                 for (size_t k = 0; k < bs * 2 + 1; ++k)
-                    sp_string_append_char_(&result, '\\');
-                sp_string_append_char_(&result, '\"');
+                    sp_string_append_char(&result, '\\');
+                sp_string_append_char(&result, '\"');
                 bs = 0;
                 continue;
             }
 
             // Normal char: emit pending backslashes as-is.
             for (size_t k = 0; k < bs; ++k)
-                sp_string_append_char_(&result, '\\');
+                sp_string_append_char(&result, '\\');
             bs = 0;
 
-            sp_string_append_char_(&result, c);
+            sp_string_append_char(&result, c);
         }
 
         // Before the closing quote, emit 2*bs backslashes.
         for (size_t k = 0; k < bs * 2; ++k)
-            sp_string_append_char_(&result, '\\');
+            sp_string_append_char(&result, '\\');
 
-        sp_string_append_char_(&result, '\"');
+        sp_string_append_char(&result, '\"');
     }
 
     return result;
 }
 
 static inline HANDLE
-sp_win32_open_inheritable_file_(const char *path,
-                                DWORD       desired_access,
-                                DWORD       creation_disposition)
+sp_win32_open_inheritable_file(const char *path,
+                               DWORD       desired_access,
+                               DWORD       creation_disposition)
 {
     SECURITY_ATTRIBUTES sa;
     ZeroMemory(&sa, sizeof(sa));
@@ -875,14 +861,14 @@ sp_win32_open_inheritable_file_(const char *path,
 }
 
 static inline HANDLE
-sp_win32_open_inheritable_null_(DWORD desired_access)
+sp_win32_open_inheritable_null(DWORD desired_access)
 {
     // NUL is the Windows null device
-    return sp_win32_open_inheritable_file_("NUL", desired_access, OPEN_EXISTING);
+    return sp_win32_open_inheritable_file("NUL", desired_access, OPEN_EXISTING);
 }
 
 static inline int
-sp_win32_seek_to_end_(HANDLE h)
+sp_win32_seek_to_end(HANDLE h)
 {
     LARGE_INTEGER zero;
     zero.QuadPart = 0;
@@ -895,10 +881,10 @@ sp_win32_seek_to_end_(HANDLE h)
 }
 
 static inline int
-sp_win32_apply_redir_(const SpRedirect *r,
-                      int               is_stdin,
-                      HANDLE           *out_handle,
-                      int              *out_should_close)
+sp_win32_apply_redir(const SpRedirect *r,
+                     int               is_stdin,
+                     HANDLE           *out_handle,
+                     int              *out_should_close)
 {
     SP_ASSERT(r);
     SP_ASSERT(out_handle);
@@ -913,7 +899,7 @@ sp_win32_apply_redir_(const SpRedirect *r,
 
     case SP_REDIR_NULL: {
         DWORD access = is_stdin ? GENERIC_READ : GENERIC_WRITE;
-        HANDLE h = sp_win32_open_inheritable_null_(access);
+        HANDLE h = sp_win32_open_inheritable_null(access);
         if (h == INVALID_HANDLE_VALUE) return 0;
         *out_handle = h;
         *out_should_close = 1;
@@ -924,7 +910,7 @@ sp_win32_apply_redir_(const SpRedirect *r,
         const char *path = r->file_path.buffer ? r->file_path.buffer : "";
         if (is_stdin) {
             // stdin: read from file
-            HANDLE h = sp_win32_open_inheritable_file_(path, GENERIC_READ, OPEN_EXISTING);
+            HANDLE h = sp_win32_open_inheritable_file(path, GENERIC_READ, OPEN_EXISTING);
             if (h == INVALID_HANDLE_VALUE) return 0;
             *out_handle = h;
             *out_should_close = 1;
@@ -932,15 +918,15 @@ sp_win32_apply_redir_(const SpRedirect *r,
         } else {
             // stdout/stderr: write to file
             if (r->file_mode == SP_FILE_WRITE_TRUNC) {
-                HANDLE h = sp_win32_open_inheritable_file_(path, GENERIC_WRITE, CREATE_ALWAYS);
+                HANDLE h = sp_win32_open_inheritable_file(path, GENERIC_WRITE, CREATE_ALWAYS);
                 if (h == INVALID_HANDLE_VALUE) return 0;
                 *out_handle = h;
                 *out_should_close = 1;
                 return 1;
             } else if (r->file_mode == SP_FILE_WRITE_APPEND) {
-                HANDLE h = sp_win32_open_inheritable_file_(path, FILE_APPEND_DATA, OPEN_ALWAYS);
+                HANDLE h = sp_win32_open_inheritable_file(path, FILE_APPEND_DATA, OPEN_ALWAYS);
                 if (h == INVALID_HANDLE_VALUE) return 0;
-                (void)sp_win32_seek_to_end_(h);
+                (void)sp_win32_seek_to_end(h);
                 *out_handle = h;
                 *out_should_close = 1;
                 return 1;
@@ -965,85 +951,10 @@ sp_win32_apply_redir_(const SpRedirect *r,
     return 0;
 }
 
-
-SPDEF void
-sp_pipe_close(SpPipe *p) SP_NOEXCEPT
-{
-    if (!sp_pipe_is_valid_(p)) return;
-    HANDLE h = sp_pipe_get_handle_(p);
-    if (h && h != INVALID_HANDLE_VALUE) CloseHandle(h);
-    memset(p, 0, sizeof(*p));
-}
-
-SP_NODISCARD SPDEF int
-sp_pipe_read(SpPipe *p,
-             void   *buf,
-             size_t  cap,
-             size_t *out_n) SP_NOEXCEPT
-{
-    SP_ASSERT(out_n);
-
-    *out_n = 0;
-
-    if (!sp_pipe_is_valid_(p) || p->mode != SP_PIPE_READ) {
-        SP_LOG_ERROR("%s", "sp_pipe_read: invalid pipe or wrong mode");
-        return 0;
-    }
-
-    HANDLE h = sp_pipe_get_handle_(p);
-    if (!h || h == INVALID_HANDLE_VALUE) return 0;
-
-    DWORD got = 0;
-    DWORD want = (cap > 0xFFFFFFFFu) ? 0xFFFFFFFFu : (DWORD)cap;
-
-    BOOL ok = ReadFile(h, buf, want, &got, NULL);
-    if (!ok) {
-        DWORD err = GetLastError();
-        if (err == ERROR_BROKEN_PIPE) { // EOF
-            *out_n = 0;
-            return 1;
-        }
-        SpString msg = sp_win32_strerror(err);
-        SP_LOG_ERROR("sp_pipe_read failed: %s", msg.buffer);
-        sp_string_free_(&msg);
-        return 0;
-    }
-
-    *out_n = (size_t)got;
-    return 1;
-}
-
-SP_NODISCARD SPDEF int
-sp_pipe_write(SpPipe *p, const void *buf, size_t len, size_t *out_n) SP_NOEXCEPT
-{
-    SP_ASSERT(out_n);
-    *out_n = 0;
-
-    if (!sp_pipe_is_valid_(p) || p->mode != SP_PIPE_WRITE) {
-        SP_LOG_ERROR("%s", "sp_pipe_write: invalid pipe or wrong mode");
-        return 0;
-    }
-
-    HANDLE h = sp_pipe_get_handle_(p);
-    if (!h || h == INVALID_HANDLE_VALUE) return 0;
-
-    DWORD wrote = 0;
-    DWORD want = (len > 0xFFFFFFFFu) ? 0xFFFFFFFFu : (DWORD)len;
-
-    BOOL ok = WriteFile(h, buf, want, &wrote, NULL);
-    if (!ok) {
-        sp_win32_log_last_error_("sp_pipe_write failed");
-        return 0;
-    }
-
-    *out_n = (size_t)wrote;
-    return 1;
-}
-
 static inline int
-sp_win32_make_pipe_(HANDLE *out_parent_end,
-                    HANDLE *out_child_end,
-                    int     parent_reads)
+sp_win32_make_pipe(HANDLE *out_parent_end,
+                   HANDLE *out_child_end,
+                   int     parent_reads)
 {
     SP_ASSERT(out_parent_end && out_child_end);
 
@@ -1078,6 +989,83 @@ sp_win32_make_pipe_(HANDLE *out_parent_end,
         *out_child_end  = read_h;
         return 1;
     }
+}
+
+SPDEF void
+sp_pipe_close(SpPipe *p) SP_NOEXCEPT
+{
+    if (!sp_pipe_is_valid(p)) return;
+    HANDLE h = sp_pipe_get_handle(p);
+    if (h && h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    memset(p, 0, sizeof(*p));
+}
+
+SPDEF int
+sp_pipe_read(SpPipe *p,
+             void   *buf,
+             size_t  cap,
+             size_t *out_n) SP_NOEXCEPT
+{
+    SP_ASSERT(out_n);
+
+    *out_n = 0;
+
+    if (!sp_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
+        SP_LOG_ERROR("%s", "sp_pipe_read: invalid pipe or wrong mode");
+        return 0;
+    }
+
+    HANDLE h = sp_pipe_get_handle(p);
+    if (!h || h == INVALID_HANDLE_VALUE) return 0;
+
+    DWORD got = 0;
+    DWORD want = (cap > 0xFFFFFFFFu) ? 0xFFFFFFFFu : (DWORD)cap;
+
+    BOOL ok = ReadFile(h, buf, want, &got, NULL);
+    if (!ok) {
+        DWORD err = GetLastError();
+        if (err == ERROR_BROKEN_PIPE) { // EOF
+            *out_n = 0;
+            return 1;
+        }
+        SpString msg = sp_win32_strerror(err);
+        SP_LOG_ERROR("sp_pipe_read failed: %s", msg.buffer);
+        sp_string_free(&msg);
+        return 0;
+    }
+
+    *out_n = (size_t)got;
+    return 1;
+}
+
+SPDEF int
+sp_pipe_write(SpPipe     *p,
+              const void *buf,
+              size_t      len,
+              size_t *out_n) SP_NOEXCEPT
+{
+    SP_ASSERT(out_n);
+    *out_n = 0;
+
+    if (!sp_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
+        SP_LOG_ERROR("%s", "sp_pipe_write: invalid pipe or wrong mode");
+        return 0;
+    }
+
+    HANDLE h = sp_pipe_get_handle(p);
+    if (!h || h == INVALID_HANDLE_VALUE) return 0;
+
+    DWORD wrote = 0;
+    DWORD want = (len > 0xFFFFFFFFu) ? 0xFFFFFFFFu : (DWORD)len;
+
+    BOOL ok = WriteFile(h, buf, want, &wrote, NULL);
+    if (!ok) {
+        sp_win32_log_last_error("sp_pipe_write failed");
+        return 0;
+    }
+
+    *out_n = (size_t)wrote;
+    return 1;
 }
 
 SPDEF SpProc
@@ -1119,8 +1107,8 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     // ---- stdin ----
     if (cmd->stdio.stdin_redir.kind == SP_REDIR_PIPE) {
         HANDLE parent_end = NULL, child_end = NULL;
-        if (!sp_win32_make_pipe_(&parent_end, &child_end, /*parent_reads=*/0)) {
-            sp_win32_log_last_error_("CreatePipe(stdin) failed");
+        if (!sp_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/0)) {
+            sp_win32_log_last_error("CreatePipe(stdin) failed");
             goto fail;
         }
         // child reads:
@@ -1129,10 +1117,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         close_stdin_child_end = 1;
 
         // parent writes:
-        sp_pipe_set_handle_(stdin_out, parent_end, SP_PIPE_WRITE);
+        sp_pipe_set_handle(stdin_out, parent_end, SP_PIPE_WRITE);
     } else {
-        if (!sp_win32_apply_redir_(&cmd->stdio.stdin_redir, 1, &h_in, &close_in)) {
-            sp_win32_log_last_error_("Failed to apply stdin redirection");
+        if (!sp_win32_apply_redir(&cmd->stdio.stdin_redir, 1, &h_in, &close_in)) {
+            sp_win32_log_last_error("Failed to apply stdin redirection");
             goto fail;
         }
     }
@@ -1140,8 +1128,8 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     // ---- stdout ----
     if (cmd->stdio.stdout_redir.kind == SP_REDIR_PIPE) {
         HANDLE parent_end = NULL, child_end = NULL;
-        if (!sp_win32_make_pipe_(&parent_end, &child_end, /*parent_reads=*/1)) {
-            sp_win32_log_last_error_("CreatePipe(stdout) failed");
+        if (!sp_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/1)) {
+            sp_win32_log_last_error("CreatePipe(stdout) failed");
             goto fail;
         }
         // child writes:
@@ -1150,10 +1138,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         close_stdout_child_end = 1;
 
         // parent reads:
-        sp_pipe_set_handle_(stdout_out, parent_end, SP_PIPE_READ);
+        sp_pipe_set_handle(stdout_out, parent_end, SP_PIPE_READ);
     } else {
-        if (!sp_win32_apply_redir_(&cmd->stdio.stdout_redir, 0, &h_out, &close_out)) {
-            sp_win32_log_last_error_("Failed to apply stdout redirection");
+        if (!sp_win32_apply_redir(&cmd->stdio.stdout_redir, 0, &h_out, &close_out)) {
+            sp_win32_log_last_error("Failed to apply stdout redirection");
             goto fail;
         }
     }
@@ -1164,25 +1152,25 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         close_err = 0;   // stdout "owns" the handle if it needs closing
     } else if (cmd->stdio.stderr_redir.kind == SP_REDIR_PIPE) {
         HANDLE parent_end = NULL, child_end = NULL;
-        if (!sp_win32_make_pipe_(&parent_end, &child_end, /*parent_reads=*/1)) {
-            sp_win32_log_last_error_("CreatePipe(stderr) failed");
+        if (!sp_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/1)) {
+            sp_win32_log_last_error("CreatePipe(stderr) failed");
             goto fail;
         }
         h_err = child_end;
         stderr_child_end = child_end;
         close_stderr_child_end = 1;
 
-        sp_pipe_set_handle_(stderr_out, parent_end, SP_PIPE_READ);
+        sp_pipe_set_handle(stderr_out, parent_end, SP_PIPE_READ);
     } else {
         if (cmd->stdio.stderr_redir.kind == SP_REDIR_INHERIT) {
             h_err = GetStdHandle(STD_ERROR_HANDLE);
             if (h_err == NULL || h_err == INVALID_HANDLE_VALUE) {
-                sp_win32_log_last_error_("GetStdHandle(STD_ERROR_HANDLE) failed");
+                sp_win32_log_last_error("GetStdHandle(STD_ERROR_HANDLE) failed");
                 goto fail;
             }
         } else {
-            if (!sp_win32_apply_redir_(&cmd->stdio.stderr_redir, 0, &h_err, &close_err)) {
-                sp_win32_log_last_error_("Failed to apply stderr redirection");
+            if (!sp_win32_apply_redir(&cmd->stdio.stderr_redir, 0, &h_err, &close_err)) {
+                sp_win32_log_last_error("Failed to apply stderr redirection");
                 goto fail;
             }
         }
@@ -1195,7 +1183,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     PROCESS_INFORMATION proc_info;
     ZeroMemory(&proc_info, sizeof(PROCESS_INFORMATION));
 
-    cmd_quoted = sp_win32_quote_cmd_(cmd);
+    cmd_quoted = sp_win32_quote_cmd(cmd);
     SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows requires command line (incl NUL) < 32767 chars");
 
     SP_LOG_INFO(SP_STRING_FMT_STR(cmd_quoted), SP_STRING_FMT_ARG(cmd_quoted));
@@ -1211,10 +1199,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
                              &startup_info,
                              &proc_info);
 
-    sp_string_free_(&cmd_quoted);
+    sp_string_free(&cmd_quoted);
 
     if (!success) {
-        sp_win32_log_last_error_("CreateProcessA failed");
+        sp_win32_log_last_error("CreateProcessA failed");
         goto fail;
     }
 
@@ -1231,7 +1219,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     CloseHandle(proc_info.hThread);
     {
         SpProc proc = SP_ZERO_INIT;
-        sp_proc_set_handle_(&proc, proc_info.hProcess);
+        sp_proc_set_handle(&proc, proc_info.hProcess);
         return proc;
     }
 
@@ -1262,12 +1250,12 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 {
     SP_ASSERT(proc);
 
-    if (!sp_proc_is_valid_(proc)) {
+    if (!sp_proc_is_valid(proc)) {
         SP_LOG_ERROR("%s", "sp_proc_wait called on invalid process handle");
         return -1;
     }
 
-    HANDLE h = sp_proc_get_handle_(proc);
+    HANDLE h = sp_proc_get_handle(proc);
     if (h == NULL) {
         SP_LOG_ERROR("sp_proc_wait got NULL HANDLE");
         memset(proc, 0, sizeof(*proc));
@@ -1276,7 +1264,7 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 
     DWORD w = WaitForSingleObject(h, INFINITE);
     if (w == WAIT_FAILED) {
-        sp_win32_log_last_error_("WaitForSingleObject failed");
+        sp_win32_log_last_error("WaitForSingleObject failed");
         CloseHandle(h);
         memset(proc, 0, sizeof(*proc));
         return -1;
@@ -1291,7 +1279,7 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 
     DWORD exit_code = 0;
     if (!GetExitCodeProcess(h, &exit_code)) {
-        sp_win32_log_last_error_("GetExitCodeProcess failed");
+        sp_win32_log_last_error("GetExitCodeProcess failed");
         CloseHandle(h);
         memset(proc, 0, sizeof(*proc));
         return -1;
@@ -1316,16 +1304,17 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 typedef char sp_native_fits_handle_[(SP_NATIVE_MAX >= sizeof(pid_t)) ? 1 : -1];
 
 static inline void
-sp_proc_set_pid_(SpProc* proc, pid_t pid)
+sp_proc_set_pid(SpProc* proc,
+                pid_t   pid)
 {
-  sp_proc_handle_store_by_bytes_(proc, &pid, sizeof(pid));
+  sp_proc_handle_store_by_bytes(proc, &pid, sizeof(pid));
 }
 
 static inline pid_t
-sp_proc_get_pid_(const SpProc* proc)
+sp_proc_get_pid(const SpProc* proc)
 {
   pid_t pid = (pid_t)0;
-  sp_proc_handle_load_by_bytes_(proc, &pid, sizeof(pid));
+  sp_proc_handle_load_by_bytes(proc, &pid, sizeof(pid));
   return pid;
 }
 
