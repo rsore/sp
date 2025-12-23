@@ -6,6 +6,35 @@
 
 #include <stdio.h>
 
+/* int */
+/* main(void) */
+/* { */
+/*     SpCmd cmd = {0}; */
+/*     SpPipe out = {0}; */
+
+/*     sp_cmd_add_arg(&cmd, "cmd.exe"); */
+/*     sp_cmd_add_arg(&cmd, "/C"); */
+/*     sp_cmd_add_arg(&cmd, "echo HELLO_PIPE"); */
+
+/*     sp_cmd_redirect_stdout_pipe(&cmd, &out); */
+
+/*     SpProc p = sp_cmd_exec_async(&cmd); */
+
+/*     char buf[256]; */
+/*     size_t n = 0; */
+/*     while (sp_pipe_read(&out, buf, sizeof(buf), &n) && n > 0) { */
+/*         fwrite(buf, 1, n, stdout); */
+/*     } */
+/*     sp_pipe_close(&out); */
+
+/*     int code = sp_proc_wait(&p); */
+/*     printf("\nexit=%d\n", code); */
+
+/*     sp_cmd_free(&cmd); */
+
+/*     return 0; */
+/* } */
+
 static int file_read_all(const char *path, char *buf, size_t cap)
 {
     FILE *f = fopen(path, "rb");
