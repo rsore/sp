@@ -465,9 +465,6 @@ sp_proc_is_valid(const SpProc* proc)
     return proc && proc->handle_size != 0;
 }
 
-
-typedef char sp_native_fits_pipe_[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
-
 static inline void
 sp_pipe_handle_store_by_bytes(SpPipe     *p,
                               const void *value,
@@ -535,50 +532,6 @@ sp_redirect_free_alloc(SpRedirect *r)
         sp_string_free(&r->file_path);
     }
     memset(r, 0, sizeof(*r));
-}
-
-static inline SpString
-sp_win32_strerror(DWORD err)
-{
-#ifndef SP_WIN32_ERR_MSG_SIZE
-#  define SP_WIN32_ERR_MSG_SIZE (4 * 1024)
-#endif // SP_WIN32_ERR_MSG_SIZE
-
-    static char win32_error_message[SP_WIN32_ERR_MSG_SIZE] = SP_ZERO_INIT;
-    DWORD error_message_size = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, // dwFlags
-                                              NULL,                                                       // lpSource
-                                              err,                                                        // dwMessageId
-                                              LANG_USER_DEFAULT,                                          // dwLanguageId
-                                              win32_error_message,                                        // lpBuffer
-                                              SP_WIN32_ERR_MSG_SIZE,                                      // nSize
-                                              NULL);                                                      // Arguments
-
-    if (error_message_size == 0) {
-        if (GetLastError() != ERROR_MR_MID_NOT_FOUND) {
-            SpString result = sp_sprint("Could not get error message for 0x%lX", err);
-            if (result.buffer == NULL) return sp_string_make("");
-            return result;
-        } else {
-            SpString result = sp_sprint("Invalid Windows Error code (0x%lX)", err);
-            if (result.buffer == NULL) return sp_string_make("");
-            return result;
-        }
-    }
-
-    while (error_message_size > 1 && isspace(win32_error_message[error_message_size - 1])) {
-        win32_error_message[--error_message_size] = '\0';
-    }
-
-    return sp_string_make(win32_error_message);
-}
-
-static inline void
-sp_win32_log_last_error(const char *context)
-{
-    DWORD err = GetLastError();
-    SpString msg = sp_win32_strerror(err);
-    SP_LOG_ERROR("%s: %s", context, msg.buffer);
-    sp_string_free(&msg);
 }
 
 SPDEF void
@@ -734,8 +687,9 @@ sp_cmd_free(SpCmd *cmd) SP_NOEXCEPT
  */
 #if SP_WINDOWS
 
-// Compile-time check that SP_NATIVE_MAX is large enough
-typedef char sp_native_fits_handle_[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
+// Compile-time checks
+typedef char sp_native_fits_pipe[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
+typedef char sp_native_fits_handle[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
 
 static inline void
 sp_proc_set_handle(SpProc *proc,
@@ -766,6 +720,51 @@ sp_pipe_get_handle(const SpPipe *p)
     HANDLE h = NULL;
     sp_pipe_handle_load_by_bytes(p, &h, sizeof(h));
     return h;
+}
+
+
+static inline SpString
+sp_win32_strerror(DWORD err)
+{
+#ifndef SP_WIN32_ERR_MSG_SIZE
+#  define SP_WIN32_ERR_MSG_SIZE (4 * 1024)
+#endif // SP_WIN32_ERR_MSG_SIZE
+
+    static char win32_error_message[SP_WIN32_ERR_MSG_SIZE] = SP_ZERO_INIT;
+    DWORD error_message_size = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, // dwFlags
+                                              NULL,                                                       // lpSource
+                                              err,                                                        // dwMessageId
+                                              LANG_USER_DEFAULT,                                          // dwLanguageId
+                                              win32_error_message,                                        // lpBuffer
+                                              SP_WIN32_ERR_MSG_SIZE,                                      // nSize
+                                              NULL);                                                      // Arguments
+
+    if (error_message_size == 0) {
+        if (GetLastError() != ERROR_MR_MID_NOT_FOUND) {
+            SpString result = sp_sprint("Could not get error message for 0x%lX", err);
+            if (result.buffer == NULL) return sp_string_make("");
+            return result;
+        } else {
+            SpString result = sp_sprint("Invalid Windows Error code (0x%lX)", err);
+            if (result.buffer == NULL) return sp_string_make("");
+            return result;
+        }
+    }
+
+    while (error_message_size > 1 && isspace(win32_error_message[error_message_size - 1])) {
+        win32_error_message[--error_message_size] = '\0';
+    }
+
+    return sp_string_make(win32_error_message);
+}
+
+static inline void
+sp_win32_log_last_error(const char *context)
+{
+    DWORD err = GetLastError();
+    SpString msg = sp_win32_strerror(err);
+    SP_LOG_ERROR("%s: %s", context, msg.buffer);
+    sp_string_free(&msg);
 }
 
 /**
