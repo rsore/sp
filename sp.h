@@ -766,6 +766,7 @@ sp_internal_win32_strerror(DWORD err)
 static inline void
 sp_internal_win32_log_last_error(const char *context)
 {
+    (void)context; // Unused if error logging is disabled
     DWORD err = GetLastError();
     SpString msg = sp_internal_win32_strerror(err);
     SP_LOG_ERROR("%s: %s", context, msg.buffer);
@@ -1342,6 +1343,7 @@ sp_internal_posix_pipe_get_handle(const SpPipe *p)
 static inline void
 sp_internal_posix_log_errno(const char *context)
 {
+    (void)context; // Unused if error logging is disabled
     SP_LOG_ERROR("%s: errno=%d", context, errno);
 }
 
