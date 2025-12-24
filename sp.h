@@ -1427,6 +1427,70 @@ sp_posix_build_argv(const SpCmd *cmd)
     return argv;
 }
 
+static inline int
+sp_posix_shell_is_safe_char(unsigned char c)
+{
+    if ((c >= 'a' && c <= 'z') ||
+        (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9'))
+        return 1;
+
+    switch (c) {
+        case '_': case '@': case '%': case '+': case '=':
+        case ':': case ',': case '.': case '/': case '-':
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+static inline void
+sp_posix_shell_append_escaped_arg(SpString   *out,
+                                  const char *arg)
+{
+    if (!arg) arg = "";
+
+    // Empty string must be quoted
+    if (arg[0] == '\0') {
+        sp_string_append_cstr(out, "''");
+        return;
+    }
+
+    // Check if we can print unquoted
+    int safe = 1;
+    for (const unsigned char *p = (const unsigned char *)arg; *p; ++p) {
+        if (!sp_posix_shell_is_safe_char(*p)) { safe = 0; break; }
+    }
+
+    if (safe) {
+        sp_string_append_cstr(out, arg);
+        return;
+    }
+
+    // Single-quote style: '...'\''...'
+    sp_string_append_char(out, '\'');
+    for (const char *p = arg; *p; ++p) {
+        if (*p == '\'') {
+            sp_string_append_cstr(out, "'\\''"); // end quote, escaped quote, reopen
+        } else {
+            sp_string_append_char(out, *p);
+        }
+    }
+    sp_string_append_char(out, '\'');
+}
+
+static inline SpString
+sp_posix_quote_cmd(const SpCmd *cmd)
+{
+    SpString out = SP_ZERO_INIT;
+    for (size_t i = 0; i < cmd->args.size; ++i) {
+        const char *arg = cmd->args.buffer[i].buffer ? cmd->args.buffer[i].buffer : "";
+        if (i) sp_string_append_char(&out, ' ');
+        sp_posix_shell_append_escaped_arg(&out, arg);
+    }
+    return out;
+}
+
 
 SPDEF void
 sp_pipe_close(SpPipe *p) SP_NOEXCEPT
@@ -1592,6 +1656,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         SP_FREE(argv);
         goto fail;
     }
+
+    SpString quoted = sp_posix_quote_cmd(cmd);
+    SP_LOG_INFO(SP_STRING_FMT_STR(quoted), SP_STRING_FMT_ARG(quoted));
+    sp_string_free(&quoted);
 
     pid = fork();
     if (pid < 0) {
