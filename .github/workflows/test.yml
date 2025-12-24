@@ -1,0 +1,159 @@
+name: test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build-and-test-linux-c:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        compiler: [gcc-14, clang-20]
+        standard: [c99, c11, c17, c23]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - if: matrix.compiler == 'gcc-14'
+        name: Install gcc-14
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install gcc-14 g++-14
+
+      - if: matrix.compiler == 'clang-20'
+        name: Install clang-20
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod u+x llvm.sh
+          sudo ./llvm.sh 20
+          sudo apt update
+          sudo apt install clang-20
+
+      - name: Compile test
+        run: |
+          ${{ matrix.compiler }} -Wall -Wextra -Werror -pedantic-errors -std=${{ matrix.standard }} \
+            -o sp_test test/sp_test.c
+
+      - name: Run test
+        run: ./sp_test
+
+  build-and-test-linux-cpp:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        compiler: [g++-14, clang++-20]
+        standard: [c++11, c++14, c++17, c++20, c++23, c++26]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - if: matrix.compiler == 'g++-14'
+        name: Install gcc-14
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install gcc-14
+
+      - if: matrix.compiler == 'clang++-20'
+        name: Install clang-20
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod u+x llvm.sh
+          sudo ./llvm.sh 20
+          sudo apt update
+          sudo apt install clang-20
+
+      - name: Compile test
+        run: |
+          ${{ matrix.compiler }} -x c++ -Wall -Wextra -Werror -pedantic-errors -std=${{ matrix.standard }} \
+            -o sp_test test/sp_test.c
+
+      - name: Run test
+        run: ./sp_test
+
+  build-and-test-windows-c:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        standard: [c11, c17]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC environment and compile test
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cl /TC /W4 /WX /wd4996 /std:${{ matrix.standard }} test/sp_test.c /Fe:sp_test.exe /wd4127
+
+      - name: Run test
+        run: .\sp_test.exe
+
+  build-and-test-windows-cpp:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        standard: [c++14, c++17, c++20, c++latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC environment and compile test
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cl /TP /W4 /WX /wd4996 /std:${{ matrix.standard }} test/sp_test.c /Fe:sp_test.exe /wd4127
+
+      - name: Run test
+        run: .\sp_test.exe
+
+  build-and-test-macos-c:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        standard: [c99, c11, c17, c2x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile test
+        run: |
+          clang -Wall -Wextra -Werror -pedantic-errors -std=${{ matrix.standard }} \
+            -o sp_test test/sp_test.c
+
+      - name: Run test
+        run: ./sp_test
+
+  build-and-test-macos-cpp:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        standard: [c++11, c++14, c++17, c++20, c++2b]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile test
+        run: |
+          clang++ -x c++ -Wall -Wextra -Werror -pedantic-errors -std=${{ matrix.standard }} \
+            -o sp_test test/sp_test.c
+
+      - name: Run test
+        run: ./sp_test
