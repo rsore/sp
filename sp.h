@@ -1591,8 +1591,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     int close_out_fd = 0;
     int close_err_fd = 0;
 
-    pid_t pid;
-    char **argv;
+    // Declared here to satisfy C++ goto quirks
+    pid_t pid = -1;
+    char **argv = NULL;
+    SpString quoted = SP_ZERO_INIT;
 
     // stdin
     if (cmd->stdio.stdin_redir.kind == SP_REDIR_PIPE) {
@@ -1657,7 +1659,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         goto fail;
     }
 
-    SpString quoted = sp_internal_posix_quote_cmd(cmd);
+    quoted = sp_internal_posix_quote_cmd(cmd);
     SP_LOG_INFO(SP_INTERNAL_STRING_FMT_STR(quoted), SP_INTERNAL_STRING_FMT_ARG(quoted));
     sp_internal_string_free(&quoted);
 
