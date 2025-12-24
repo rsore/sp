@@ -2,9 +2,13 @@ name: test
 
 on:
   push:
-    branches: [ main ]
+    paths:
+      - sp.h
+      - test/sp_test.c
   pull_request:
-    branches: [ main ]
+    paths:
+      - sp.h
+      - test/sp_test.c
 
 jobs:
 
