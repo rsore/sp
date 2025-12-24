@@ -310,7 +310,7 @@ SPDEF int sp_proc_wait(SpProc *proc) SP_NOEXCEPT;
 
 
 static inline char *
-sp_strdup(const char *str)
+sp_internal_strdup(const char *str)
 {
     size_t len = strlen(str);
     char *buf = (char *)SP_REALLOC(NULL, len+1);
@@ -320,36 +320,36 @@ sp_strdup(const char *str)
     return buf;
 }
 
-#define SP_STRING_FMT_STR(str) "%.*s"
-#define SP_STRING_FMT_ARG(str) (int)(str).size, (str).buffer
+#define SP_INTERNAL_STRING_FMT_STR(str) "%.*s"
+#define SP_INTERNAL_STRING_FMT_ARG(str) (int)(str).size, (str).buffer
 
 static inline void
-sp_string_ensure_null(SpString *str)
+sp_internal_string_ensure_null(SpString *str)
 {
     sp_darray_grow_to_fit(str, str->size + 1);
     str->buffer[str->size] = '\0';
 }
 
 static inline SpString
-sp_string_make(const char *c_str)
+sp_internal_string_make(const char *c_str)
 {
     SpString str = SP_ZERO_INIT;
     size_t len = strlen(c_str);
 
-    str.buffer = sp_strdup(c_str);
+    str.buffer = sp_internal_strdup(c_str);
     SP_ASSERT(str.buffer);
 
     str.size = len;
     str.capacity = len;
 
-    sp_string_ensure_null(&str);
+    sp_internal_string_ensure_null(&str);
 
     return str;
 }
 
 static inline void
-sp_string_replace_content(SpString   *str,
-                          const char *new_content)
+sp_internal_string_replace_content(SpString   *str,
+                                   const char *new_content)
 {
     size_t new_len = strlen(new_content);
 
@@ -360,8 +360,8 @@ sp_string_replace_content(SpString   *str,
 }
 
 static inline void
-sp_string_append_char(SpString *str,
-                      char      c)
+sp_internal_string_append_char(SpString *str,
+                               char      c)
 {
     sp_darray_grow_to_fit(str, str->size + 2);
     str->buffer[str->size++] = c;
@@ -369,8 +369,8 @@ sp_string_append_char(SpString *str,
 }
 
 static inline void
-sp_string_append_cstr(SpString   *str,
-                      const char *cstr)
+sp_internal_string_append_cstr(SpString   *str,
+                               const char *cstr)
 {
     size_t len = strlen(cstr);
     sp_darray_grow_to_fit(str, str->size + len + 1);
@@ -380,8 +380,8 @@ sp_string_append_cstr(SpString   *str,
 }
 
 static inline void
-sp_string_append_string(SpString       *str,
-                        const SpString *to_append)
+sp_internal_string_append_string(SpString       *str,
+                                 const SpString *to_append)
 {
     sp_darray_grow_to_fit(str, str->size + to_append->size + 1);
     memcpy(str->buffer + str->size, to_append->buffer, to_append->size);
@@ -390,8 +390,8 @@ sp_string_append_string(SpString       *str,
 }
 
 static inline int
-sp_string_contains_any(const SpString *s,
-                       const char     *chars)
+sp_internal_string_contains_any(const SpString *s,
+                                const char     *chars)
 {
     const char *buf = s->buffer ? s->buffer : "";
     size_t len = s->size;
@@ -406,20 +406,20 @@ sp_string_contains_any(const SpString *s,
 }
 
 static inline void
-sp_string_clear(SpString *str)
+sp_internal_string_clear(SpString *str)
 {
     str->size = 0;
     if (str->buffer) str->buffer[0] = '\0';
 }
 
 static inline void
-sp_string_free(SpString *str)
+sp_internal_string_free(SpString *str)
 {
     sp_darray_free(str);
 }
 
 static inline SpString
-sp_sprint(const char *fmt, ...)
+sp_internal_sprint(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -438,15 +438,15 @@ sp_sprint(const char *fmt, ...)
     va_end(args);
 
     SpString result = SP_ZERO_INIT;
-    sp_string_append_cstr(&result, buffer);
+    sp_internal_string_append_cstr(&result, buffer);
 
     return result;
 }
 
 static inline void
-sp_proc_handle_store_by_bytes(SpProc     *proc,
-                              const void *value,
-                              size_t      value_size)
+sp_internal_proc_handle_store_by_bytes(SpProc     *proc,
+                                       const void *value,
+                                       size_t      value_size)
 {
     SP_ASSERT(proc && value);
     SP_ASSERT(value_size <= SP_NATIVE_MAX);
@@ -455,9 +455,9 @@ sp_proc_handle_store_by_bytes(SpProc     *proc,
 }
 
 static inline void
-sp_proc_handle_load_by_bytes(const SpProc *proc,
-                             void         *out,
-                             size_t        out_size)
+sp_internal_proc_handle_load_by_bytes(const SpProc *proc,
+                                      void         *out,
+                                      size_t        out_size)
 {
     SP_ASSERT(proc && out);
     SP_ASSERT((size_t)proc->handle_size == out_size);
@@ -465,16 +465,16 @@ sp_proc_handle_load_by_bytes(const SpProc *proc,
 }
 
 static inline int
-sp_proc_is_valid(const SpProc* proc)
+sp_internal_proc_is_valid(const SpProc* proc)
 {
     return proc && proc->handle_size != 0;
 }
 
 static inline void
-sp_pipe_handle_store_by_bytes(SpPipe     *p,
-                              const void *value,
-                              size_t      value_size,
-                              SpPipeMode  mode)
+sp_internal_pipe_handle_store_by_bytes(SpPipe     *p,
+                                       const void *value,
+                                       size_t      value_size,
+                                       SpPipeMode  mode)
 {
     SP_ASSERT(p && value);
     SP_ASSERT(value_size <= SP_NATIVE_MAX);
@@ -485,9 +485,9 @@ sp_pipe_handle_store_by_bytes(SpPipe     *p,
 }
 
 static inline void
-sp_pipe_handle_load_by_bytes(const SpPipe *p,
-                             void         *out,
-                             size_t        out_size)
+sp_internal_pipe_handle_load_by_bytes(const SpPipe *p,
+                                      void         *out,
+                                      size_t        out_size)
 {
     SP_ASSERT(p && out);
     SP_ASSERT((size_t)p->handle_size == out_size);
@@ -496,23 +496,23 @@ sp_pipe_handle_load_by_bytes(const SpPipe *p,
 }
 
 static inline int
-sp_pipe_is_valid(const SpPipe *p)
+sp_internal_pipe_is_valid(const SpPipe *p)
 {
     return p && p->handle_size != 0;
 }
 
 static inline void
-sp_redirect_set_file(SpRedirect *r,
-                     const char *path,
-                     SpFileMode  mode)
+sp_internal_redirect_set_file(SpRedirect *r,
+                              const char *path,
+                              SpFileMode  mode)
 {
     SP_ASSERT(r);
     SP_ASSERT(path);
 
     if (r->file_path.buffer) {
-        sp_string_replace_content(&r->file_path, path);
+        sp_internal_string_replace_content(&r->file_path, path);
     } else {
-        r->file_path = sp_string_make(path);
+        r->file_path = sp_internal_string_make(path);
     }
 
     r->file_mode = mode;
@@ -521,20 +521,20 @@ sp_redirect_set_file(SpRedirect *r,
 }
 
 static inline void
-sp_redirect_reset_keep_alloc(SpRedirect *r)
+sp_internal_redirect_reset_keep_alloc(SpRedirect *r)
 {
     if (r->file_path.buffer) {
-        sp_string_clear(&r->file_path);
+        sp_internal_string_clear(&r->file_path);
     }
     r->out_pipe = NULL;
     r->kind = SP_REDIR_INHERIT;
 }
 
 static inline void
-sp_redirect_free_alloc(SpRedirect *r)
+sp_internal_redirect_free_alloc(SpRedirect *r)
 {
     if (r->file_path.buffer) {
-        sp_string_free(&r->file_path);
+        sp_internal_string_free(&r->file_path);
     }
     memset(r, 0, sizeof(*r));
 }
@@ -546,9 +546,9 @@ sp_cmd_add_arg(SpCmd      *cmd,
     SP_ASSERT(cmd);
 
     if (cmd->args.size < cmd->internal_strings_already_initted) {
-        sp_string_replace_content(&cmd->args.buffer[cmd->args.size++], arg);
+        sp_internal_string_replace_content(&cmd->args.buffer[cmd->args.size++], arg);
     } else {
-        SpString str = sp_string_make(arg);
+        SpString str = sp_internal_string_make(arg);
         sp_darray_append(&cmd->args, str);
         cmd->internal_strings_already_initted += 1;
     }
@@ -567,7 +567,7 @@ sp_cmd_redirect_stdin_from_file(SpCmd *cmd, const char *path) SP_NOEXCEPT
 {
     SP_ASSERT(cmd);
 
-    sp_redirect_set_file(&cmd->stdio.stdin_redir, path, SP_FILE_READ);
+    sp_internal_redirect_set_file(&cmd->stdio.stdin_redir, path, SP_FILE_READ);
 }
 
 SPDEF void
@@ -585,7 +585,7 @@ sp_cmd_redirect_stdout_to_file(SpCmd *cmd, const char *path, SpFileMode mode) SP
     // stdout must be write mode
     SP_ASSERT(mode == SP_FILE_WRITE_TRUNC || mode == SP_FILE_WRITE_APPEND);
 
-    sp_redirect_set_file(&cmd->stdio.stdout_redir, path, mode);
+    sp_internal_redirect_set_file(&cmd->stdio.stdout_redir, path, mode);
 }
 
 SPDEF void
@@ -603,7 +603,7 @@ sp_cmd_redirect_stderr_to_file(SpCmd *cmd, const char *path, SpFileMode mode) SP
     // stderr must be write mode
     SP_ASSERT(mode == SP_FILE_WRITE_TRUNC || mode == SP_FILE_WRITE_APPEND);
 
-    sp_redirect_set_file(&cmd->stdio.stderr_redir, path, mode);
+    sp_internal_redirect_set_file(&cmd->stdio.stderr_redir, path, mode);
 }
 
 SPDEF void
@@ -665,9 +665,9 @@ sp_cmd_reset(SpCmd *cmd) SP_NOEXCEPT
 
     cmd->args.size = 0;
 
-    sp_redirect_reset_keep_alloc(&cmd->stdio.stdin_redir);
-    sp_redirect_reset_keep_alloc(&cmd->stdio.stdout_redir);
-    sp_redirect_reset_keep_alloc(&cmd->stdio.stderr_redir);
+    sp_internal_redirect_reset_keep_alloc(&cmd->stdio.stdin_redir);
+    sp_internal_redirect_reset_keep_alloc(&cmd->stdio.stdout_redir);
+    sp_internal_redirect_reset_keep_alloc(&cmd->stdio.stderr_redir);
 }
 
 SPDEF void
@@ -676,14 +676,14 @@ sp_cmd_free(SpCmd *cmd) SP_NOEXCEPT
     SP_ASSERT(cmd);
 
     for (size_t i = 0; i < cmd->internal_strings_already_initted; ++i) {
-        sp_string_free(&cmd->args.buffer[i]);
+        sp_internal_string_free(&cmd->args.buffer[i]);
     }
     sp_darray_free(&cmd->args);
     cmd->internal_strings_already_initted = 0;
 
-    sp_redirect_free_alloc(&cmd->stdio.stdin_redir);
-    sp_redirect_free_alloc(&cmd->stdio.stdout_redir);
-    sp_redirect_free_alloc(&cmd->stdio.stderr_redir);
+    sp_internal_redirect_free_alloc(&cmd->stdio.stdin_redir);
+    sp_internal_redirect_free_alloc(&cmd->stdio.stdout_redir);
+    sp_internal_redirect_free_alloc(&cmd->stdio.stderr_redir);
 }
 
 
@@ -697,39 +697,39 @@ typedef char sp_native_fits_pipe[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
 typedef char sp_native_fits_handle[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
 
 static inline void
-sp_win32_proc_set_handle(SpProc *proc,
-                         HANDLE  handle)
+sp_internal_win32_proc_set_handle(SpProc *proc,
+                                  HANDLE  handle)
 {
-  sp_proc_handle_store_by_bytes(proc, &handle, sizeof(handle));
+  sp_internal_proc_handle_store_by_bytes(proc, &handle, sizeof(handle));
 }
 
 static inline HANDLE
-sp_win32_proc_get_handle(SpProc* proc)
+sp_internal_win32_proc_get_handle(SpProc* proc)
 {
   HANDLE handle = NULL;
-  sp_proc_handle_load_by_bytes(proc, &handle, sizeof(handle));
+  sp_internal_proc_handle_load_by_bytes(proc, &handle, sizeof(handle));
   return handle;
 }
 
 static inline void
-sp_win32_pipe_set_handle(SpPipe     *p,
-                         HANDLE      h,
-                         SpPipeMode  mode)
+sp_internal_win32_pipe_set_handle(SpPipe     *p,
+                                  HANDLE      h,
+                                  SpPipeMode  mode)
 {
-    sp_pipe_handle_store_by_bytes(p, &h, sizeof(h), mode);
+    sp_internal_pipe_handle_store_by_bytes(p, &h, sizeof(h), mode);
 }
 
 static inline HANDLE
-sp_win32_pipe_get_handle(const SpPipe *p)
+sp_internal_win32_pipe_get_handle(const SpPipe *p)
 {
     HANDLE h = NULL;
-    sp_pipe_handle_load_by_bytes(p, &h, sizeof(h));
+    sp_internal_pipe_handle_load_by_bytes(p, &h, sizeof(h));
     return h;
 }
 
 
 static inline SpString
-sp_win32_strerror(DWORD err)
+sp_internal_win32_strerror(DWORD err)
 {
 #ifndef SP_WIN32_ERR_MSG_SIZE
 #  define SP_WIN32_ERR_MSG_SIZE (4 * 1024)
@@ -746,12 +746,12 @@ sp_win32_strerror(DWORD err)
 
     if (error_message_size == 0) {
         if (GetLastError() != ERROR_MR_MID_NOT_FOUND) {
-            SpString result = sp_sprint("Could not get error message for 0x%lX", err);
-            if (result.buffer == NULL) return sp_string_make("");
+            SpString result = sp_internal_sprint("Could not get error message for 0x%lX", err);
+            if (result.buffer == NULL) return sp_internal_string_make("");
             return result;
         } else {
-            SpString result = sp_sprint("Invalid Windows Error code (0x%lX)", err);
-            if (result.buffer == NULL) return sp_string_make("");
+            SpString result = sp_internal_sprint("Invalid Windows Error code (0x%lX)", err);
+            if (result.buffer == NULL) return sp_internal_string_make("");
             return result;
         }
     }
@@ -760,24 +760,24 @@ sp_win32_strerror(DWORD err)
         win32_error_message[--error_message_size] = '\0';
     }
 
-    return sp_string_make(win32_error_message);
+    return sp_internal_string_make(win32_error_message);
 }
 
 static inline void
-sp_win32_log_last_error(const char *context)
+sp_internal_win32_log_last_error(const char *context)
 {
     DWORD err = GetLastError();
-    SpString msg = sp_win32_strerror(err);
+    SpString msg = sp_internal_win32_strerror(err);
     SP_LOG_ERROR("%s: %s", context, msg.buffer);
-    sp_string_free(&msg);
+    sp_internal_string_free(&msg);
 }
 
 /**
  * Windows command-line quoting for CreateProcess / CommandLineToArgvW.
- * Caller must sp_string_free() the returned string.
+ * Caller must sp_internal_string_free() the returned string.
  */
 static inline SpString
-sp_win32_quote_cmd(const SpCmd *cmd)
+sp_internal_win32_quote_cmd(const SpCmd *cmd)
 {
     SpString result = SP_ZERO_INIT;
 
@@ -786,22 +786,22 @@ sp_win32_quote_cmd(const SpCmd *cmd)
         const char *s = argp->buffer ? argp->buffer : "";
         size_t len = argp->size;
 
-        if (i > 0) sp_string_append_char(&result, ' ');
+        if (i > 0) sp_internal_string_append_char(&result, ' ');
 
         // Need quotes if:
         //    - empty
         //    - contains whitespace (space/tab/nl/vtab) or a quote
         //    - or ends with a backslash
         int needs_quote = ((len == 0) ||
-                           sp_string_contains_any(argp, " \t\n\v\"") ||
+                           sp_internal_string_contains_any(argp, " \t\n\v\"") ||
                            (len > 0 && s[len - 1] == '\\'));
 
         if (!needs_quote) {
-            sp_string_append_string(&result, argp);
+            sp_internal_string_append_string(&result, argp);
             continue;
         }
 
-        sp_string_append_char(&result, '\"');
+        sp_internal_string_append_char(&result, '\"');
 
         // Count backslashes and emit them once we know what follows.
         size_t bs = 0;
@@ -817,34 +817,34 @@ sp_win32_quote_cmd(const SpCmd *cmd)
             if (c == '\"') {
                 // Emit 2*bs backslashes, then one backslash to escape the quote.
                 for (size_t k = 0; k < bs * 2 + 1; ++k)
-                    sp_string_append_char(&result, '\\');
-                sp_string_append_char(&result, '\"');
+                    sp_internal_string_append_char(&result, '\\');
+                sp_internal_string_append_char(&result, '\"');
                 bs = 0;
                 continue;
             }
 
             // Normal char: emit pending backslashes as-is.
             for (size_t k = 0; k < bs; ++k)
-                sp_string_append_char(&result, '\\');
+                sp_internal_string_append_char(&result, '\\');
             bs = 0;
 
-            sp_string_append_char(&result, c);
+            sp_internal_string_append_char(&result, c);
         }
 
         // Before the closing quote, emit 2*bs backslashes.
         for (size_t k = 0; k < bs * 2; ++k)
-            sp_string_append_char(&result, '\\');
+            sp_internal_string_append_char(&result, '\\');
 
-        sp_string_append_char(&result, '\"');
+        sp_internal_string_append_char(&result, '\"');
     }
 
     return result;
 }
 
 static inline HANDLE
-sp_win32_open_inheritable_file(const char *path,
-                               DWORD       desired_access,
-                               DWORD       creation_disposition)
+sp_internal_win32_open_inheritable_file(const char *path,
+                                        DWORD       desired_access,
+                                        DWORD       creation_disposition)
 {
     SECURITY_ATTRIBUTES sa;
     ZeroMemory(&sa, sizeof(sa));
@@ -865,14 +865,14 @@ sp_win32_open_inheritable_file(const char *path,
 }
 
 static inline HANDLE
-sp_win32_open_inheritable_null(DWORD desired_access)
+sp_internal_win32_open_inheritable_null(DWORD desired_access)
 {
     // NUL is the Windows null device
-    return sp_win32_open_inheritable_file("NUL", desired_access, OPEN_EXISTING);
+    return sp_internal_win32_open_inheritable_file("NUL", desired_access, OPEN_EXISTING);
 }
 
 static inline int
-sp_win32_seek_to_end(HANDLE h)
+sp_internal_win32_seek_to_end(HANDLE h)
 {
     LARGE_INTEGER zero;
     zero.QuadPart = 0;
@@ -885,10 +885,10 @@ sp_win32_seek_to_end(HANDLE h)
 }
 
 static inline int
-sp_win32_apply_redir(const SpRedirect *r,
-                     int               is_stdin,
-                     HANDLE           *out_handle,
-                     int              *out_should_close)
+sp_internal_win32_apply_redir(const SpRedirect *r,
+                              int               is_stdin,
+                              HANDLE           *out_handle,
+                              int              *out_should_close)
 {
     SP_ASSERT(r);
     SP_ASSERT(out_handle);
@@ -903,7 +903,7 @@ sp_win32_apply_redir(const SpRedirect *r,
 
     case SP_REDIR_NULL: {
         DWORD access = is_stdin ? GENERIC_READ : GENERIC_WRITE;
-        HANDLE h = sp_win32_open_inheritable_null(access);
+        HANDLE h = sp_internal_win32_open_inheritable_null(access);
         if (h == INVALID_HANDLE_VALUE) return 0;
         *out_handle = h;
         *out_should_close = 1;
@@ -914,7 +914,7 @@ sp_win32_apply_redir(const SpRedirect *r,
         const char *path = r->file_path.buffer ? r->file_path.buffer : "";
         if (is_stdin) {
             // stdin: read from file
-            HANDLE h = sp_win32_open_inheritable_file(path, GENERIC_READ, OPEN_EXISTING);
+            HANDLE h = sp_internal_win32_open_inheritable_file(path, GENERIC_READ, OPEN_EXISTING);
             if (h == INVALID_HANDLE_VALUE) return 0;
             *out_handle = h;
             *out_should_close = 1;
@@ -922,15 +922,15 @@ sp_win32_apply_redir(const SpRedirect *r,
         } else {
             // stdout/stderr: write to file
             if (r->file_mode == SP_FILE_WRITE_TRUNC) {
-                HANDLE h = sp_win32_open_inheritable_file(path, GENERIC_WRITE, CREATE_ALWAYS);
+                HANDLE h = sp_internal_win32_open_inheritable_file(path, GENERIC_WRITE, CREATE_ALWAYS);
                 if (h == INVALID_HANDLE_VALUE) return 0;
                 *out_handle = h;
                 *out_should_close = 1;
                 return 1;
             } else if (r->file_mode == SP_FILE_WRITE_APPEND) {
-                HANDLE h = sp_win32_open_inheritable_file(path, FILE_APPEND_DATA, OPEN_ALWAYS);
+                HANDLE h = sp_internal_win32_open_inheritable_file(path, FILE_APPEND_DATA, OPEN_ALWAYS);
                 if (h == INVALID_HANDLE_VALUE) return 0;
-                (void)sp_win32_seek_to_end(h);
+                (void)sp_internal_win32_seek_to_end(h);
                 *out_handle = h;
                 *out_should_close = 1;
                 return 1;
@@ -956,9 +956,9 @@ sp_win32_apply_redir(const SpRedirect *r,
 }
 
 static inline int
-sp_win32_make_pipe(HANDLE *out_parent_end,
-                   HANDLE *out_child_end,
-                   int     parent_reads)
+sp_internal_win32_make_pipe(HANDLE *out_parent_end,
+                            HANDLE *out_child_end,
+                            int     parent_reads)
 {
     SP_ASSERT(out_parent_end && out_child_end);
 
@@ -998,8 +998,8 @@ sp_win32_make_pipe(HANDLE *out_parent_end,
 SPDEF void
 sp_pipe_close(SpPipe *p) SP_NOEXCEPT
 {
-    if (!sp_pipe_is_valid(p)) return;
-    HANDLE h = sp_win32_pipe_get_handle(p);
+    if (!sp_internal_pipe_is_valid(p)) return;
+    HANDLE h = sp_internal_win32_pipe_get_handle(p);
     if (h && h != INVALID_HANDLE_VALUE) CloseHandle(h);
     memset(p, 0, sizeof(*p));
 }
@@ -1014,12 +1014,12 @@ sp_pipe_read(SpPipe *p,
 
     *out_n = 0;
 
-    if (!sp_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
+    if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
         SP_LOG_ERROR("%s", "sp_pipe_read: invalid pipe or wrong mode");
         return 0;
     }
 
-    HANDLE h = sp_win32_pipe_get_handle(p);
+    HANDLE h = sp_internal_win32_pipe_get_handle(p);
     if (!h || h == INVALID_HANDLE_VALUE) return 0;
 
     DWORD got = 0;
@@ -1032,9 +1032,9 @@ sp_pipe_read(SpPipe *p,
             *out_n = 0;
             return 1;
         }
-        SpString msg = sp_win32_strerror(err);
+        SpString msg = sp_internal_win32_strerror(err);
         SP_LOG_ERROR("sp_pipe_read failed: %s", msg.buffer);
-        sp_string_free(&msg);
+        sp_internal_string_free(&msg);
         return 0;
     }
 
@@ -1051,12 +1051,12 @@ sp_pipe_write(SpPipe     *p,
     SP_ASSERT(out_n);
     *out_n = 0;
 
-    if (!sp_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
+    if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
         SP_LOG_ERROR("%s", "sp_pipe_write: invalid pipe or wrong mode");
         return 0;
     }
 
-    HANDLE h = sp_win32_pipe_get_handle(p);
+    HANDLE h = sp_internal_win32_pipe_get_handle(p);
     if (!h || h == INVALID_HANDLE_VALUE) return 0;
 
     DWORD wrote = 0;
@@ -1064,7 +1064,7 @@ sp_pipe_write(SpPipe     *p,
 
     BOOL ok = WriteFile(h, buf, want, &wrote, NULL);
     if (!ok) {
-        sp_win32_log_last_error("sp_pipe_write failed");
+        sp_internal_win32_log_last_error("sp_pipe_write failed");
         return 0;
     }
 
@@ -1111,8 +1111,8 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     // ---- stdin ----
     if (cmd->stdio.stdin_redir.kind == SP_REDIR_PIPE) {
         HANDLE parent_end = NULL, child_end = NULL;
-        if (!sp_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/0)) {
-            sp_win32_log_last_error("CreatePipe(stdin) failed");
+        if (!sp_internal_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/0)) {
+            sp_internal_win32_log_last_error("CreatePipe(stdin) failed");
             goto fail;
         }
         // child reads:
@@ -1121,10 +1121,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         close_stdin_child_end = 1;
 
         // parent writes:
-        sp_win32_pipe_set_handle(stdin_out, parent_end, SP_PIPE_WRITE);
+        sp_internal_win32_pipe_set_handle(stdin_out, parent_end, SP_PIPE_WRITE);
     } else {
-        if (!sp_win32_apply_redir(&cmd->stdio.stdin_redir, 1, &h_in, &close_in)) {
-            sp_win32_log_last_error("Failed to apply stdin redirection");
+        if (!sp_internal_win32_apply_redir(&cmd->stdio.stdin_redir, 1, &h_in, &close_in)) {
+            sp_internal_win32_log_last_error("Failed to apply stdin redirection");
             goto fail;
         }
     }
@@ -1132,8 +1132,8 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     // ---- stdout ----
     if (cmd->stdio.stdout_redir.kind == SP_REDIR_PIPE) {
         HANDLE parent_end = NULL, child_end = NULL;
-        if (!sp_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/1)) {
-            sp_win32_log_last_error("CreatePipe(stdout) failed");
+        if (!sp_internal_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/1)) {
+            sp_internal_win32_log_last_error("CreatePipe(stdout) failed");
             goto fail;
         }
         // child writes:
@@ -1142,10 +1142,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         close_stdout_child_end = 1;
 
         // parent reads:
-        sp_win32_pipe_set_handle(stdout_out, parent_end, SP_PIPE_READ);
+        sp_internal_win32_pipe_set_handle(stdout_out, parent_end, SP_PIPE_READ);
     } else {
-        if (!sp_win32_apply_redir(&cmd->stdio.stdout_redir, 0, &h_out, &close_out)) {
-            sp_win32_log_last_error("Failed to apply stdout redirection");
+        if (!sp_internal_win32_apply_redir(&cmd->stdio.stdout_redir, 0, &h_out, &close_out)) {
+            sp_internal_win32_log_last_error("Failed to apply stdout redirection");
             goto fail;
         }
     }
@@ -1156,25 +1156,25 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         close_err = 0;   // stdout "owns" the handle if it needs closing
     } else if (cmd->stdio.stderr_redir.kind == SP_REDIR_PIPE) {
         HANDLE parent_end = NULL, child_end = NULL;
-        if (!sp_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/1)) {
-            sp_win32_log_last_error("CreatePipe(stderr) failed");
+        if (!sp_internal_win32_make_pipe(&parent_end, &child_end, /*parent_reads=*/1)) {
+            sp_internal_win32_log_last_error("CreatePipe(stderr) failed");
             goto fail;
         }
         h_err = child_end;
         stderr_child_end = child_end;
         close_stderr_child_end = 1;
 
-        sp_win32_pipe_set_handle(stderr_out, parent_end, SP_PIPE_READ);
+        sp_internal_win32_pipe_set_handle(stderr_out, parent_end, SP_PIPE_READ);
     } else {
         if (cmd->stdio.stderr_redir.kind == SP_REDIR_INHERIT) {
             h_err = GetStdHandle(STD_ERROR_HANDLE);
             if (h_err == NULL || h_err == INVALID_HANDLE_VALUE) {
-                sp_win32_log_last_error("GetStdHandle(STD_ERROR_HANDLE) failed");
+                sp_internal_win32_log_last_error("GetStdHandle(STD_ERROR_HANDLE) failed");
                 goto fail;
             }
         } else {
-            if (!sp_win32_apply_redir(&cmd->stdio.stderr_redir, 0, &h_err, &close_err)) {
-                sp_win32_log_last_error("Failed to apply stderr redirection");
+            if (!sp_internal_win32_apply_redir(&cmd->stdio.stderr_redir, 0, &h_err, &close_err)) {
+                sp_internal_win32_log_last_error("Failed to apply stderr redirection");
                 goto fail;
             }
         }
@@ -1187,10 +1187,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     PROCESS_INFORMATION proc_info;
     ZeroMemory(&proc_info, sizeof(PROCESS_INFORMATION));
 
-    cmd_quoted = sp_win32_quote_cmd(cmd);
+    cmd_quoted = sp_internal_win32_quote_cmd(cmd);
     SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows requires command line (incl NUL) < 32767 chars");
 
-    SP_LOG_INFO(SP_STRING_FMT_STR(cmd_quoted), SP_STRING_FMT_ARG(cmd_quoted));
+    SP_LOG_INFO(SP_INTERNAL_STRING_FMT_STR(cmd_quoted), SP_INTERNAL_STRING_FMT_ARG(cmd_quoted));
 
     success = CreateProcessA(NULL,
                              cmd_quoted.buffer,
@@ -1203,10 +1203,10 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
                              &startup_info,
                              &proc_info);
 
-    sp_string_free(&cmd_quoted);
+    sp_internal_string_free(&cmd_quoted);
 
     if (!success) {
-        sp_win32_log_last_error("CreateProcessA failed");
+        sp_internal_win32_log_last_error("CreateProcessA failed");
         goto fail;
     }
 
@@ -1223,7 +1223,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     CloseHandle(proc_info.hThread);
     {
         SpProc proc = SP_ZERO_INIT;
-        sp_win32_proc_set_handle(&proc, proc_info.hProcess);
+        sp_internal_win32_proc_set_handle(&proc, proc_info.hProcess);
         return proc;
     }
 
@@ -1254,12 +1254,12 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 {
     SP_ASSERT(proc);
 
-    if (!sp_proc_is_valid(proc)) {
+    if (!sp_internal_proc_is_valid(proc)) {
         SP_LOG_ERROR("%s", "sp_proc_wait called on invalid process handle");
         return -1;
     }
 
-    HANDLE h = sp_win32_proc_get_handle(proc);
+    HANDLE h = sp_internal_win32_proc_get_handle(proc);
     if (h == NULL) {
         SP_LOG_ERROR("sp_proc_wait got NULL HANDLE");
         memset(proc, 0, sizeof(*proc));
@@ -1268,7 +1268,7 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 
     DWORD w = WaitForSingleObject(h, INFINITE);
     if (w == WAIT_FAILED) {
-        sp_win32_log_last_error("WaitForSingleObject failed");
+        sp_internal_win32_log_last_error("WaitForSingleObject failed");
         CloseHandle(h);
         memset(proc, 0, sizeof(*proc));
         return -1;
@@ -1283,7 +1283,7 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 
     DWORD exit_code = 0;
     if (!GetExitCodeProcess(h, &exit_code)) {
-        sp_win32_log_last_error("GetExitCodeProcess failed");
+        sp_internal_win32_log_last_error("GetExitCodeProcess failed");
         CloseHandle(h);
         memset(proc, 0, sizeof(*proc));
         return -1;
@@ -1309,44 +1309,44 @@ typedef char sp_native_fits_handle[(SP_NATIVE_MAX >= sizeof(pid_t)) ? 1 : -1];
 
 
 static inline void
-sp_posix_proc_set_handle(SpProc *proc,
-                         pid_t   pid)
+sp_internal_posix_proc_set_handle(SpProc *proc,
+                                  pid_t   pid)
 {
-    sp_proc_handle_store_by_bytes(proc, &pid, sizeof(pid));
+    sp_internal_proc_handle_store_by_bytes(proc, &pid, sizeof(pid));
 }
 
 static inline pid_t
-sp_posix_proc_get_handle(SpProc *proc)
+sp_internal_posix_proc_get_handle(SpProc *proc)
 {
     pid_t pid = (pid_t)0;
-    sp_proc_handle_load_by_bytes(proc, &pid, sizeof(pid));
+    sp_internal_proc_handle_load_by_bytes(proc, &pid, sizeof(pid));
     return pid;
 }
 
 static inline void
-sp_posix_pipe_set_handle(SpPipe     *p,
-                         int         fd,
-                         SpPipeMode  mode)
+sp_internal_posix_pipe_set_handle(SpPipe     *p,
+                                  int         fd,
+                                  SpPipeMode  mode)
 {
-    sp_pipe_handle_store_by_bytes(p, &fd, sizeof(fd), mode);
+    sp_internal_pipe_handle_store_by_bytes(p, &fd, sizeof(fd), mode);
 }
 
 static inline int
-sp_posix_pipe_get_handle(const SpPipe *p)
+sp_internal_posix_pipe_get_handle(const SpPipe *p)
 {
     int fd = -1;
-    sp_pipe_handle_load_by_bytes(p, &fd, sizeof(fd));
+    sp_internal_pipe_handle_load_by_bytes(p, &fd, sizeof(fd));
     return fd;
 }
 
 static inline void
-sp_posix_log_errno(const char *context)
+sp_internal_posix_log_errno(const char *context)
 {
     SP_LOG_ERROR("%s: errno=%d", context, errno);
 }
 
 static inline int
-sp_posix_set_cloexec(int fd)
+sp_internal_posix_set_cloexec(int fd)
 {
     int flags = fcntl(fd, F_GETFD);
     if (flags < 0) return 0;
@@ -1358,9 +1358,9 @@ sp_posix_set_cloexec(int fd)
 // - if parent_reads: parent gets read end, child gets write end
 // - else: parent gets write end, child gets read end
 static inline int
-sp_posix_make_pipe(int *out_parent_end,
-                   int *out_child_end,
-                   int  parent_reads)
+sp_internal_posix_make_pipe(int *out_parent_end,
+                            int *out_child_end,
+                            int  parent_reads)
 {
     int fds[2] = {-1, -1};
 
@@ -1371,8 +1371,8 @@ sp_posix_make_pipe(int *out_parent_end,
 
     // Ensure parent ends don't leak across exec in the child (and vice versa).
     // Also close unused ends.
-    (void)sp_posix_set_cloexec(r);
-    (void)sp_posix_set_cloexec(w);
+    (void)sp_internal_posix_set_cloexec(r);
+    (void)sp_internal_posix_set_cloexec(w);
 
     if (parent_reads) {
         *out_parent_end = r;
@@ -1385,14 +1385,14 @@ sp_posix_make_pipe(int *out_parent_end,
 }
 
 static inline int
-sp_posix_open_null(int is_stdin)
+sp_internal_posix_open_null(int is_stdin)
 {
     return open("/dev/null", is_stdin ? O_RDONLY : O_WRONLY);
 }
 
 static inline int
-sp_posix_open_file(const SpRedirect *r,
-                   int               is_stdin)
+sp_internal_posix_open_file(const SpRedirect *r,
+                            int               is_stdin)
 {
     const char *path = r->file_path.buffer ? r->file_path.buffer : "";
 
@@ -1415,7 +1415,7 @@ sp_posix_open_file(const SpRedirect *r,
 // Build argv for execvp: must be NULL-terminated.
 // Returns malloc'd array; elements point into cmd->args strings (owned by cmd).
 static inline char **
-sp_posix_build_argv(const SpCmd *cmd)
+sp_internal_posix_build_argv(const SpCmd *cmd)
 {
     size_t n = cmd->args.size;
     char **argv = (char **)SP_REALLOC(NULL, sizeof(char*) * (n + 1));
@@ -1428,7 +1428,7 @@ sp_posix_build_argv(const SpCmd *cmd)
 }
 
 static inline int
-sp_posix_shell_is_safe_char(unsigned char c)
+sp_internal_posix_shell_is_safe_char(unsigned char c)
 {
     if ((c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z') ||
@@ -1445,48 +1445,48 @@ sp_posix_shell_is_safe_char(unsigned char c)
 }
 
 static inline void
-sp_posix_shell_append_escaped_arg(SpString   *out,
-                                  const char *arg)
+sp_internal_posix_shell_append_escaped_arg(SpString   *out,
+                                           const char *arg)
 {
     if (!arg) arg = "";
 
     // Empty string must be quoted
     if (arg[0] == '\0') {
-        sp_string_append_cstr(out, "''");
+        sp_internal_string_append_cstr(out, "''");
         return;
     }
 
     // Check if we can print unquoted
     int safe = 1;
     for (const unsigned char *p = (const unsigned char *)arg; *p; ++p) {
-        if (!sp_posix_shell_is_safe_char(*p)) { safe = 0; break; }
+        if (!sp_internal_posix_shell_is_safe_char(*p)) { safe = 0; break; }
     }
 
     if (safe) {
-        sp_string_append_cstr(out, arg);
+        sp_internal_string_append_cstr(out, arg);
         return;
     }
 
     // Single-quote style: '...'\''...'
-    sp_string_append_char(out, '\'');
+    sp_internal_string_append_char(out, '\'');
     for (const char *p = arg; *p; ++p) {
         if (*p == '\'') {
-            sp_string_append_cstr(out, "'\\''"); // end quote, escaped quote, reopen
+            sp_internal_string_append_cstr(out, "'\\''"); // end quote, escaped quote, reopen
         } else {
-            sp_string_append_char(out, *p);
+            sp_internal_string_append_char(out, *p);
         }
     }
-    sp_string_append_char(out, '\'');
+    sp_internal_string_append_char(out, '\'');
 }
 
 static inline SpString
-sp_posix_quote_cmd(const SpCmd *cmd)
+sp_internal_posix_quote_cmd(const SpCmd *cmd)
 {
     SpString out = SP_ZERO_INIT;
     for (size_t i = 0; i < cmd->args.size; ++i) {
         const char *arg = cmd->args.buffer[i].buffer ? cmd->args.buffer[i].buffer : "";
-        if (i) sp_string_append_char(&out, ' ');
-        sp_posix_shell_append_escaped_arg(&out, arg);
+        if (i) sp_internal_string_append_char(&out, ' ');
+        sp_internal_posix_shell_append_escaped_arg(&out, arg);
     }
     return out;
 }
@@ -1495,8 +1495,8 @@ sp_posix_quote_cmd(const SpCmd *cmd)
 SPDEF void
 sp_pipe_close(SpPipe *p) SP_NOEXCEPT
 {
-    if (!sp_pipe_is_valid(p)) return;
-    int fd = sp_posix_pipe_get_handle(p);
+    if (!sp_internal_pipe_is_valid(p)) return;
+    int fd = sp_internal_posix_pipe_get_handle(p);
     if (fd >= 0) (void)close(fd);
     memset(p, 0, sizeof(*p));
 }
@@ -1510,12 +1510,12 @@ sp_pipe_read(SpPipe *p,
     SP_ASSERT(out_n);
     *out_n = 0;
 
-    if (!sp_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
+    if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
         SP_LOG_ERROR("%s", "sp_pipe_read: invalid pipe or wrong mode");
         return 0;
     }
 
-    int fd = sp_posix_pipe_get_handle(p);
+    int fd = sp_internal_posix_pipe_get_handle(p);
     if (fd < 0) return 0;
 
     // POSIX read returns 0 on EOF.
@@ -1525,7 +1525,7 @@ sp_pipe_read(SpPipe *p,
     } while (got < 0 && errno == EINTR);
 
     if (got < 0) {
-        sp_posix_log_errno("sp_pipe_read failed");
+        sp_internal_posix_log_errno("sp_pipe_read failed");
         return 0;
     }
 
@@ -1542,12 +1542,12 @@ sp_pipe_write(SpPipe     *p,
     SP_ASSERT(out_n);
     *out_n = 0;
 
-    if (!sp_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
+    if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
         SP_LOG_ERROR("%s", "sp_pipe_write: invalid pipe or wrong mode");
         return 0;
     }
 
-    int fd = sp_posix_pipe_get_handle(p);
+    int fd = sp_internal_posix_pipe_get_handle(p);
     if (fd < 0) return 0;
 
     ssize_t wrote;
@@ -1556,7 +1556,7 @@ sp_pipe_write(SpPipe     *p,
     } while (wrote < 0 && errno == EINTR);
 
     if (wrote < 0) {
-        sp_posix_log_errno("sp_pipe_write failed");
+        sp_internal_posix_log_errno("sp_pipe_write failed");
         return 0;
     }
 
@@ -1596,59 +1596,59 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
 
     // stdin
     if (cmd->stdio.stdin_redir.kind == SP_REDIR_PIPE) {
-        if (!sp_posix_make_pipe(&stdin_parent_end, &stdin_child_end, /*parent_reads=*/0)) {
-            sp_posix_log_errno("pipe(stdin) failed");
+        if (!sp_internal_posix_make_pipe(&stdin_parent_end, &stdin_child_end, /*parent_reads=*/0)) {
+            sp_internal_posix_log_errno("pipe(stdin) failed");
             goto fail;
         }
-        sp_posix_pipe_set_handle(stdin_out, stdin_parent_end, SP_PIPE_WRITE);
+        sp_internal_posix_pipe_set_handle(stdin_out, stdin_parent_end, SP_PIPE_WRITE);
     } else if (cmd->stdio.stdin_redir.kind == SP_REDIR_NULL) {
-        in_fd = sp_posix_open_null(/*is_stdin=*/1);
-        if (in_fd < 0) { sp_posix_log_errno("open(/dev/null for stdin) failed"); goto fail; }
+        in_fd = sp_internal_posix_open_null(/*is_stdin=*/1);
+        if (in_fd < 0) { sp_internal_posix_log_errno("open(/dev/null for stdin) failed"); goto fail; }
         close_in_fd = 1;
     } else if (cmd->stdio.stdin_redir.kind == SP_REDIR_FILE) {
-        in_fd = sp_posix_open_file(&cmd->stdio.stdin_redir, /*is_stdin=*/1);
-        if (in_fd < 0) { sp_posix_log_errno("open(stdin file) failed"); goto fail; }
+        in_fd = sp_internal_posix_open_file(&cmd->stdio.stdin_redir, /*is_stdin=*/1);
+        if (in_fd < 0) { sp_internal_posix_log_errno("open(stdin file) failed"); goto fail; }
         close_in_fd = 1;
     }
 
     // stdout
     if (cmd->stdio.stdout_redir.kind == SP_REDIR_PIPE) {
-        if (!sp_posix_make_pipe(&stdout_parent_end, &stdout_child_end, /*parent_reads=*/1)) {
-            sp_posix_log_errno("pipe(stdout) failed");
+        if (!sp_internal_posix_make_pipe(&stdout_parent_end, &stdout_child_end, /*parent_reads=*/1)) {
+            sp_internal_posix_log_errno("pipe(stdout) failed");
             goto fail;
         }
-        sp_posix_pipe_set_handle(stdout_out, stdout_parent_end, SP_PIPE_READ);
+        sp_internal_posix_pipe_set_handle(stdout_out, stdout_parent_end, SP_PIPE_READ);
     } else if (cmd->stdio.stdout_redir.kind == SP_REDIR_NULL) {
-        out_fd = sp_posix_open_null(/*is_stdin=*/0);
-        if (out_fd < 0) { sp_posix_log_errno("open(/dev/null for stdout) failed"); goto fail; }
+        out_fd = sp_internal_posix_open_null(/*is_stdin=*/0);
+        if (out_fd < 0) { sp_internal_posix_log_errno("open(/dev/null for stdout) failed"); goto fail; }
         close_out_fd = 1;
     } else if (cmd->stdio.stdout_redir.kind == SP_REDIR_FILE) {
-        out_fd = sp_posix_open_file(&cmd->stdio.stdout_redir, /*is_stdin=*/0);
-        if (out_fd < 0) { sp_posix_log_errno("open(stdout file) failed"); goto fail; }
+        out_fd = sp_internal_posix_open_file(&cmd->stdio.stdout_redir, /*is_stdin=*/0);
+        if (out_fd < 0) { sp_internal_posix_log_errno("open(stdout file) failed"); goto fail; }
         close_out_fd = 1;
     }
 
     // stderr
     // Note: SP_REDIR_TO_STDOUT handled in child after stdout is set up.
     if (cmd->stdio.stderr_redir.kind == SP_REDIR_PIPE) {
-        if (!sp_posix_make_pipe(&stderr_parent_end, &stderr_child_end, /*parent_reads=*/1)) {
-            sp_posix_log_errno("pipe(stderr) failed");
+        if (!sp_internal_posix_make_pipe(&stderr_parent_end, &stderr_child_end, /*parent_reads=*/1)) {
+            sp_internal_posix_log_errno("pipe(stderr) failed");
             goto fail;
         }
-        sp_posix_pipe_set_handle(stderr_out, stderr_parent_end, SP_PIPE_READ);
+        sp_internal_posix_pipe_set_handle(stderr_out, stderr_parent_end, SP_PIPE_READ);
     } else if (cmd->stdio.stderr_redir.kind == SP_REDIR_NULL) {
-        err_fd = sp_posix_open_null(/*is_stdin=*/0);
-        if (err_fd < 0) { sp_posix_log_errno("open(/dev/null for stderr) failed"); goto fail; }
+        err_fd = sp_internal_posix_open_null(/*is_stdin=*/0);
+        if (err_fd < 0) { sp_internal_posix_log_errno("open(/dev/null for stderr) failed"); goto fail; }
         close_err_fd = 1;
     } else if (cmd->stdio.stderr_redir.kind == SP_REDIR_FILE) {
-        err_fd = sp_posix_open_file(&cmd->stdio.stderr_redir, /*is_stdin=*/0);
-        if (err_fd < 0) { sp_posix_log_errno("open(stderr file) failed"); goto fail; }
+        err_fd = sp_internal_posix_open_file(&cmd->stdio.stderr_redir, /*is_stdin=*/0);
+        if (err_fd < 0) { sp_internal_posix_log_errno("open(stderr file) failed"); goto fail; }
         close_err_fd = 1;
     }
 
-    argv = sp_posix_build_argv(cmd);
+    argv = sp_internal_posix_build_argv(cmd);
     if (!argv) {
-        sp_posix_log_errno("alloc argv failed");
+        sp_internal_posix_log_errno("alloc argv failed");
         goto fail;
     }
     if (!argv[0] || argv[0][0] == '\0') {
@@ -1657,13 +1657,13 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         goto fail;
     }
 
-    SpString quoted = sp_posix_quote_cmd(cmd);
-    SP_LOG_INFO(SP_STRING_FMT_STR(quoted), SP_STRING_FMT_ARG(quoted));
-    sp_string_free(&quoted);
+    SpString quoted = sp_internal_posix_quote_cmd(cmd);
+    SP_LOG_INFO(SP_INTERNAL_STRING_FMT_STR(quoted), SP_INTERNAL_STRING_FMT_ARG(quoted));
+    sp_internal_string_free(&quoted);
 
     pid = fork();
     if (pid < 0) {
-        sp_posix_log_errno("fork failed");
+        sp_internal_posix_log_errno("fork failed");
         SP_FREE(argv);
         goto fail;
     }
@@ -1728,7 +1728,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
 
     {
         SpProc proc = SP_ZERO_INIT;
-        sp_posix_proc_set_handle(&proc, pid);
+        sp_internal_posix_proc_set_handle(&proc, pid);
         return proc;
     }
 
@@ -1757,12 +1757,12 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 {
     SP_ASSERT(proc);
 
-    if (!sp_proc_is_valid(proc)) {
+    if (!sp_internal_proc_is_valid(proc)) {
         SP_LOG_ERROR("%s", "sp_proc_wait called on invalid process handle");
         return -1;
     }
 
-    pid_t pid = sp_posix_proc_get_handle(proc);
+    pid_t pid = sp_internal_posix_proc_get_handle(proc);
     if (pid <= 0) {
         SP_LOG_ERROR("%s", "sp_proc_wait got invalid pid");
         memset(proc, 0, sizeof(*proc));
@@ -1776,7 +1776,7 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
     } while (r < 0 && errno == EINTR);
 
     if (r < 0) {
-        sp_posix_log_errno("waitpid failed");
+        sp_internal_posix_log_errno("waitpid failed");
         memset(proc, 0, sizeof(*proc));
         return -1;
     }
