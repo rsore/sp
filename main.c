@@ -6,39 +6,39 @@
 
 #include <stdio.h>
 
-/**
- * pipe posix
- */
-int main(void)
-{
-    SpCmd  cmd = SP_ZERO_INIT;
-    SpPipe out = SP_ZERO_INIT;
+/* /\** */
+/*  * pipe posix */
+/*  *\/ */
+/* int main(void) */
+/* { */
+/*     SpCmd  cmd = SP_ZERO_INIT; */
+/*     SpPipe out = SP_ZERO_INIT; */
 
-    sp_cmd_add_arg(&cmd, "echo");
-    sp_cmd_add_arg(&cmd, "HELLO_PIPE");
+/*     sp_cmd_add_arg(&cmd, "echo"); */
+/*     sp_cmd_add_arg(&cmd, "HELLO_PIPE"); */
 
-    sp_cmd_redirect_stdout_pipe(&cmd, &out);
+/*     sp_cmd_redirect_stdout_pipe(&cmd, &out); */
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+/*     SpProc p = sp_cmd_exec_async(&cmd); */
 
-    char buf[256];
-    size_t n = 0;
-    while (sp_pipe_read(&out, buf, sizeof(buf), &n) && n > 0) {
-        fwrite(buf, 1, n, stdout);
-    }
-    sp_pipe_close(&out);
+/*     char buf[256]; */
+/*     size_t n = 0; */
+/*     while (sp_pipe_read(&out, buf, sizeof(buf), &n) && n > 0) { */
+/*         fwrite(buf, 1, n, stdout); */
+/*     } */
+/*     sp_pipe_close(&out); */
 
-    int code = sp_proc_wait(&p);
-    printf("\nexit=%d\n", code);
+/*     int code = sp_proc_wait(&p); */
+/*     printf("\nexit=%d\n", code); */
 
-    sp_cmd_free(&cmd);
-    return 0;
-}
+/*     sp_cmd_free(&cmd); */
+/*     return 0; */
+/* } */
 
 
-/**
- * pipe windows
- */
+/* /\** */
+/*  * pipe windows */
+/*  *\/ */
 /* int */
 /* main(void) */
 /* { */
@@ -74,240 +74,240 @@ int main(void)
  * Big-boi posix test
  */
 
-/* #include <sys/stat.h> */
+#include <sys/stat.h>
 
-/* static int */
-/* file_read_all(const char *path, char *buf, size_t cap) */
-/* { */
-/*     FILE *f = fopen(path, "rb"); */
-/*     if (!f) return 0; */
-/*     size_t n = fread(buf, 1, cap - 1, f); */
-/*     buf[n] = '\0'; */
-/*     fclose(f); */
-/*     return 1; */
-/* } */
+static int
+file_read_all(const char *path, char *buf, size_t cap)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    size_t n = fread(buf, 1, cap - 1, f);
+    buf[n] = '\0';
+    fclose(f);
+    return 1;
+}
 
-/* static int */
-/* str_contains(const char *haystack, const char *needle) */
-/* { */
-/*     return haystack && needle && strstr(haystack, needle) != NULL; */
-/* } */
+static int
+str_contains(const char *haystack, const char *needle)
+{
+    return haystack && needle && strstr(haystack, needle) != NULL;
+}
 
-/* static void */
-/* cmd_build_sh(SpCmd *cmd, const char *line) */
-/* { */
-/*     // /bin/sh -c "<line>" */
-/*     sp_cmd_add_arg(cmd, "/bin/sh"); */
-/*     sp_cmd_add_arg(cmd, "-c"); */
-/*     sp_cmd_add_arg(cmd, line); */
-/* } */
+static void
+cmd_build_sh(SpCmd *cmd, const char *line)
+{
+    // /bin/sh -c "<line>"
+    sp_cmd_add_arg(cmd, "/bin/sh");
+    sp_cmd_add_arg(cmd, "-c");
+    sp_cmd_add_arg(cmd, line);
+}
 
-/* static void */
-/* ensure_out_dir(void) */
-/* { */
-/*     // mkdir -p sp_test_out */
-/*     if (mkdir("sp_test_out", 0777) != 0) { */
-/*         if (errno != EEXIST) { */
-/*             perror("mkdir sp_test_out"); */
-/*         } */
-/*     } */
-/* } */
+static void
+ensure_out_dir(void)
+{
+    // mkdir -p sp_test_out
+    if (mkdir("sp_test_out", 0777) != 0) {
+        if (errno != EEXIST) {
+            perror("mkdir sp_test_out");
+        }
+    }
+}
 
-/* int */
-/* main(void) */
-/* { */
-/*     setvbuf(stdout, NULL, _IONBF, 0); */
+int
+main(void)
+{
+    setvbuf(stdout, NULL, _IONBF, 0);
 
-/*     ensure_out_dir(); */
+    ensure_out_dir();
 
-/*     char buf[8192]; */
+    char buf[8192];
 
-/*     // 1) stdout -> file trunc */
-/*     { */
-/*         printf("[1] stdout -> file (trunc)\n"); */
-/*         SpCmd cmd = SP_ZERO_INIT; */
+    // 1) stdout -> file trunc
+    {
+        printf("[1] stdout -> file (trunc)\n");
+        SpCmd cmd = SP_ZERO_INIT;
 
-/*         sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/out1.txt", SP_FILE_WRITE_TRUNC); */
-/*         cmd_build_sh(&cmd, "echo HELLO_OUT"); */
+        sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/out1.txt", SP_FILE_WRITE_TRUNC);
+        cmd_build_sh(&cmd, "echo HELLO_OUT");
 
-/*         int code = sp_cmd_exec_sync(&cmd); */
-/*         if (code != 0) printf("  FAIL: exit code %d\n", code); */
+        int code = sp_cmd_exec_sync(&cmd);
+        if (code != 0) printf("  FAIL: exit code %d\n", code);
 
-/*         if (!file_read_all("sp_test_out/out1.txt", buf, sizeof(buf))) { */
-/*             printf("  FAIL: could not read out1.txt\n"); */
-/*         } else if (!str_contains(buf, "HELLO_OUT")) { */
-/*             printf("  FAIL: out1.txt missing HELLO_OUT. Got: %s\n", buf); */
-/*         } else { */
-/*             printf("  OK\n"); */
-/*         } */
+        if (!file_read_all("sp_test_out/out1.txt", buf, sizeof(buf))) {
+            printf("  FAIL: could not read out1.txt\n");
+        } else if (!str_contains(buf, "HELLO_OUT")) {
+            printf("  FAIL: out1.txt missing HELLO_OUT. Got: %s\n", buf);
+        } else {
+            printf("  OK\n");
+        }
 
-/*         sp_cmd_free(&cmd); */
-/*     } */
+        sp_cmd_free(&cmd);
+    }
 
-/*     // 2) stdout -> file append */
-/*     { */
-/*         printf("[2] stdout -> file (append)\n"); */
-/*         SpCmd cmd = SP_ZERO_INIT; */
+    // 2) stdout -> file append
+    {
+        printf("[2] stdout -> file (append)\n");
+        SpCmd cmd = SP_ZERO_INIT;
 
-/*         sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/out2.txt", SP_FILE_WRITE_TRUNC); */
-/*         cmd_build_sh(&cmd, "echo LINE1"); */
-/*         (void)sp_cmd_exec_sync(&cmd); */
+        sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/out2.txt", SP_FILE_WRITE_TRUNC);
+        cmd_build_sh(&cmd, "echo LINE1");
+        (void)sp_cmd_exec_sync(&cmd);
 
-/*         sp_cmd_reset(&cmd); */
+        sp_cmd_reset(&cmd);
 
-/*         sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/out2.txt", SP_FILE_WRITE_APPEND); */
-/*         cmd_build_sh(&cmd, "echo LINE2"); */
-/*         (void)sp_cmd_exec_sync(&cmd); */
+        sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/out2.txt", SP_FILE_WRITE_APPEND);
+        cmd_build_sh(&cmd, "echo LINE2");
+        (void)sp_cmd_exec_sync(&cmd);
 
-/*         if (!file_read_all("sp_test_out/out2.txt", buf, sizeof(buf))) { */
-/*             printf("  FAIL: could not read out2.txt\n"); */
-/*         } else if (!str_contains(buf, "LINE1") || !str_contains(buf, "LINE2")) { */
-/*             printf("  FAIL: out2.txt missing LINE1/LINE2. Got: %s\n", buf); */
-/*         } else { */
-/*             printf("  OK\n"); */
-/*         } */
+        if (!file_read_all("sp_test_out/out2.txt", buf, sizeof(buf))) {
+            printf("  FAIL: could not read out2.txt\n");
+        } else if (!str_contains(buf, "LINE1") || !str_contains(buf, "LINE2")) {
+            printf("  FAIL: out2.txt missing LINE1/LINE2. Got: %s\n", buf);
+        } else {
+            printf("  OK\n");
+        }
 
-/*         sp_cmd_free(&cmd); */
-/*     } */
+        sp_cmd_free(&cmd);
+    }
 
-/*     // 3) stderr -> file trunc (and stdout inherit) */
-/*     { */
-/*         printf("[3] stderr -> file (trunc)\n"); */
-/*         SpCmd cmd = SP_ZERO_INIT; */
+    // 3) stderr -> file trunc (and stdout inherit)
+    {
+        printf("[3] stderr -> file (trunc)\n");
+        SpCmd cmd = SP_ZERO_INIT;
 
-/*         sp_cmd_redirect_stderr_to_file(&cmd, "sp_test_out/err1.txt", SP_FILE_WRITE_TRUNC); */
+        sp_cmd_redirect_stderr_to_file(&cmd, "sp_test_out/err1.txt", SP_FILE_WRITE_TRUNC);
 
-/*         // print to stderr */
-/*         cmd_build_sh(&cmd, "echo HELLO_ERR 1>&2"); */
+        // print to stderr
+        cmd_build_sh(&cmd, "echo HELLO_ERR 1>&2");
 
-/*         int code = sp_cmd_exec_sync(&cmd); */
-/*         if (code != 0) printf("  FAIL: exit code %d\n", code); */
+        int code = sp_cmd_exec_sync(&cmd);
+        if (code != 0) printf("  FAIL: exit code %d\n", code);
 
-/*         if (!file_read_all("sp_test_out/err1.txt", buf, sizeof(buf))) { */
-/*             printf("  FAIL: could not read err1.txt\n"); */
-/*         } else if (!str_contains(buf, "HELLO_ERR")) { */
-/*             printf("  FAIL: err1.txt missing HELLO_ERR. Got: %s\n", buf); */
-/*         } else { */
-/*             printf("  OK\n"); */
-/*         } */
+        if (!file_read_all("sp_test_out/err1.txt", buf, sizeof(buf))) {
+            printf("  FAIL: could not read err1.txt\n");
+        } else if (!str_contains(buf, "HELLO_ERR")) {
+            printf("  FAIL: err1.txt missing HELLO_ERR. Got: %s\n", buf);
+        } else {
+            printf("  OK\n");
+        }
 
-/*         sp_cmd_free(&cmd); */
-/*     } */
+        sp_cmd_free(&cmd);
+    }
 
-/*     // 4) stderr -> stdout merge, stdout -> file */
-/*     { */
-/*         printf("[4] merge stderr->stdout, stdout -> file\n"); */
-/*         SpCmd cmd = SP_ZERO_INIT; */
+    // 4) stderr -> stdout merge, stdout -> file
+    {
+        printf("[4] merge stderr->stdout, stdout -> file\n");
+        SpCmd cmd = SP_ZERO_INIT;
 
-/*         sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/merged.txt", SP_FILE_WRITE_TRUNC); */
-/*         sp_cmd_redirect_stderr_to_stdout(&cmd); */
+        sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/merged.txt", SP_FILE_WRITE_TRUNC);
+        sp_cmd_redirect_stderr_to_stdout(&cmd);
 
-/*         // Emit one line to stdout and one to stderr */
-/*         cmd_build_sh(&cmd, "echo OUT_LINE; echo ERR_LINE 1>&2"); */
+        // Emit one line to stdout and one to stderr
+        cmd_build_sh(&cmd, "echo OUT_LINE; echo ERR_LINE 1>&2");
 
-/*         int code = sp_cmd_exec_sync(&cmd); */
-/*         if (code != 0) printf("  FAIL: exit code %d\n", code); */
+        int code = sp_cmd_exec_sync(&cmd);
+        if (code != 0) printf("  FAIL: exit code %d\n", code);
 
-/*         if (!file_read_all("sp_test_out/merged.txt", buf, sizeof(buf))) { */
-/*             printf("  FAIL: could not read merged.txt\n"); */
-/*         } else if (!str_contains(buf, "OUT_LINE") || !str_contains(buf, "ERR_LINE")) { */
-/*             printf("  FAIL: merged.txt missing OUT_LINE/ERR_LINE. Got: %s\n", buf); */
-/*         } else { */
-/*             printf("  OK\n"); */
-/*         } */
+        if (!file_read_all("sp_test_out/merged.txt", buf, sizeof(buf))) {
+            printf("  FAIL: could not read merged.txt\n");
+        } else if (!str_contains(buf, "OUT_LINE") || !str_contains(buf, "ERR_LINE")) {
+            printf("  FAIL: merged.txt missing OUT_LINE/ERR_LINE. Got: %s\n", buf);
+        } else {
+            printf("  OK\n");
+        }
 
-/*         sp_cmd_free(&cmd); */
-/*     } */
+        sp_cmd_free(&cmd);
+    }
 
-/*     // 5) stdout null, stderr file (ensure stdout is suppressed) */
-/*     { */
-/*         printf("[5] stdout -> null, stderr -> file\n"); */
-/*         SpCmd cmd = SP_ZERO_INIT; */
+    // 5) stdout null, stderr file (ensure stdout is suppressed)
+    {
+        printf("[5] stdout -> null, stderr -> file\n");
+        SpCmd cmd = SP_ZERO_INIT;
 
-/*         sp_cmd_redirect_stdout_null(&cmd); */
-/*         sp_cmd_redirect_stderr_to_file(&cmd, "sp_test_out/err2.txt", SP_FILE_WRITE_TRUNC); */
+        sp_cmd_redirect_stdout_null(&cmd);
+        sp_cmd_redirect_stderr_to_file(&cmd, "sp_test_out/err2.txt", SP_FILE_WRITE_TRUNC);
 
-/*         // stdout + stderr both produced; stdout should go to /dev/null */
-/*         cmd_build_sh(&cmd, "echo OUT_SHOULD_BE_NULL; echo ERR_SHOULD_BE_IN_FILE 1>&2"); */
+        // stdout + stderr both produced; stdout should go to /dev/null
+        cmd_build_sh(&cmd, "echo OUT_SHOULD_BE_NULL; echo ERR_SHOULD_BE_IN_FILE 1>&2");
 
-/*         int code = sp_cmd_exec_sync(&cmd); */
-/*         if (code != 0) printf("  FAIL: exit code %d\n", code); */
+        int code = sp_cmd_exec_sync(&cmd);
+        if (code != 0) printf("  FAIL: exit code %d\n", code);
 
-/*         if (!file_read_all("sp_test_out/err2.txt", buf, sizeof(buf))) { */
-/*             printf("  FAIL: could not read err2.txt\n"); */
-/*         } else if (!str_contains(buf, "ERR_SHOULD_BE_IN_FILE")) { */
-/*             printf("  FAIL: err2.txt missing expected stderr line. Got: %s\n", buf); */
-/*         } else if (str_contains(buf, "OUT_SHOULD_BE_NULL")) { */
-/*             printf("  FAIL: stdout line leaked into stderr file. Got: %s\n", buf); */
-/*         } else { */
-/*             printf("  OK\n"); */
-/*         } */
+        if (!file_read_all("sp_test_out/err2.txt", buf, sizeof(buf))) {
+            printf("  FAIL: could not read err2.txt\n");
+        } else if (!str_contains(buf, "ERR_SHOULD_BE_IN_FILE")) {
+            printf("  FAIL: err2.txt missing expected stderr line. Got: %s\n", buf);
+        } else if (str_contains(buf, "OUT_SHOULD_BE_NULL")) {
+            printf("  FAIL: stdout line leaked into stderr file. Got: %s\n", buf);
+        } else {
+            printf("  OK\n");
+        }
 
-/*         sp_cmd_free(&cmd); */
-/*     } */
+        sp_cmd_free(&cmd);
+    }
 
-/*     // 6) stdin from file (shell reads stdin via `read`) */
-/*     { */
-/*         printf("[6] stdin <- file\n"); */
-/*         FILE *f = fopen("sp_test_out/in1.txt", "wb"); */
-/*         if (!f) { */
-/*             printf("  FAIL: could not create in1.txt\n"); */
-/*         } else { */
-/*             fputs("INPUT_VALUE\n", f); */
-/*             fclose(f); */
-/*         } */
+    // 6) stdin from file (shell reads stdin via `read`)
+    {
+        printf("[6] stdin <- file\n");
+        FILE *f = fopen("sp_test_out/in1.txt", "wb");
+        if (!f) {
+            printf("  FAIL: could not create in1.txt\n");
+        } else {
+            fputs("INPUT_VALUE\n", f);
+            fclose(f);
+        }
 
-/*         SpCmd cmd = SP_ZERO_INIT; */
+        SpCmd cmd = SP_ZERO_INIT;
 
-/*         sp_cmd_redirect_stdin_from_file(&cmd, "sp_test_out/in1.txt"); */
-/*         sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/in_read.txt", SP_FILE_WRITE_TRUNC); */
+        sp_cmd_redirect_stdin_from_file(&cmd, "sp_test_out/in1.txt");
+        sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/in_read.txt", SP_FILE_WRITE_TRUNC);
 
-/*         // read one line into X, then echo it */
-/*         cmd_build_sh(&cmd, "IFS= read -r X; echo READ:$X"); */
+        // read one line into X, then echo it
+        cmd_build_sh(&cmd, "IFS= read -r X; echo READ:$X");
 
-/*         int code = sp_cmd_exec_sync(&cmd); */
-/*         if (code != 0) printf("  FAIL: exit code %d\n", code); */
+        int code = sp_cmd_exec_sync(&cmd);
+        if (code != 0) printf("  FAIL: exit code %d\n", code);
 
-/*         if (!file_read_all("sp_test_out/in_read.txt", buf, sizeof(buf))) { */
-/*             printf("  FAIL: could not read in_read.txt\n"); */
-/*         } else if (!str_contains(buf, "READ:INPUT_VALUE")) { */
-/*             printf("  FAIL: stdin read did not work. Got: %s\n", buf); */
-/*         } else { */
-/*             printf("  OK\n"); */
-/*         } */
+        if (!file_read_all("sp_test_out/in_read.txt", buf, sizeof(buf))) {
+            printf("  FAIL: could not read in_read.txt\n");
+        } else if (!str_contains(buf, "READ:INPUT_VALUE")) {
+            printf("  FAIL: stdin read did not work. Got: %s\n", buf);
+        } else {
+            printf("  OK\n");
+        }
 
-/*         sp_cmd_free(&cmd); */
-/*     } */
+        sp_cmd_free(&cmd);
+    }
 
-/*     // 7) stdin null (program should see EOF and not block) */
-/*     { */
-/*         printf("[7] stdin <- null (should not block)\n"); */
-/*         SpCmd cmd = SP_ZERO_INIT; */
+    // 7) stdin null (program should see EOF and not block)
+    {
+        printf("[7] stdin <- null (should not block)\n");
+        SpCmd cmd = SP_ZERO_INIT;
 
-/*         sp_cmd_redirect_stdin_null(&cmd); */
-/*         sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/stdin_null.txt", SP_FILE_WRITE_TRUNC); */
+        sp_cmd_redirect_stdin_null(&cmd);
+        sp_cmd_redirect_stdout_to_file(&cmd, "sp_test_out/stdin_null.txt", SP_FILE_WRITE_TRUNC);
 
-/*         // If stdin is EOF, read fails; still echo AFTER. */
-/*         // (POSIX sh: read returns nonzero on EOF.) */
-/*         cmd_build_sh(&cmd, "IFS= read -r X || true; echo AFTER"); */
+        // If stdin is EOF, read fails; still echo AFTER.
+        // (POSIX sh: read returns nonzero on EOF.)
+        cmd_build_sh(&cmd, "IFS= read -r X || true; echo AFTER");
 
-/*         int code = sp_cmd_exec_sync(&cmd); */
-/*         if (code != 0) printf("  FAIL: exit code %d\n", code); */
+        int code = sp_cmd_exec_sync(&cmd);
+        if (code != 0) printf("  FAIL: exit code %d\n", code);
 
-/*         if (!file_read_all("sp_test_out/stdin_null.txt", buf, sizeof(buf))) { */
-/*             printf("  FAIL: could not read stdin_null.txt\n"); */
-/*         } else if (!str_contains(buf, "AFTER")) { */
-/*             printf("  FAIL: did not reach AFTER (stdin null might have blocked). Got: %s\n", buf); */
-/*         } else { */
-/*             printf("  OK\n"); */
-/*         } */
+        if (!file_read_all("sp_test_out/stdin_null.txt", buf, sizeof(buf))) {
+            printf("  FAIL: could not read stdin_null.txt\n");
+        } else if (!str_contains(buf, "AFTER")) {
+            printf("  FAIL: did not reach AFTER (stdin null might have blocked). Got: %s\n", buf);
+        } else {
+            printf("  OK\n");
+        }
 
-/*         sp_cmd_free(&cmd); */
-/*     } */
+        sp_cmd_free(&cmd);
+    }
 
-/*     printf("Done.\n"); */
-/*     return 0; */
-/* } */
+    printf("Done.\n");
+    return 0;
+}
 
 
 

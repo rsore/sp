@@ -697,14 +697,14 @@ typedef char sp_native_fits_pipe[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
 typedef char sp_native_fits_handle[(SP_NATIVE_MAX >= sizeof(HANDLE)) ? 1 : -1];
 
 static inline void
-sp_proc_set_handle(SpProc *proc,
-                   HANDLE  handle)
+sp_win32_proc_set_handle(SpProc *proc,
+                         HANDLE  handle)
 {
   sp_proc_handle_store_by_bytes(proc, &handle, sizeof(handle));
 }
 
 static inline HANDLE
-sp_proc_get_handle(SpProc* proc)
+sp_win32_proc_get_handle(SpProc* proc)
 {
   HANDLE handle = NULL;
   sp_proc_handle_load_by_bytes(proc, &handle, sizeof(handle));
@@ -712,15 +712,15 @@ sp_proc_get_handle(SpProc* proc)
 }
 
 static inline void
-sp_pipe_set_handle(SpPipe     *p,
-                   HANDLE      h,
-                   SpPipeMode  mode)
+sp_win32_pipe_set_handle(SpPipe     *p,
+                         HANDLE      h,
+                         SpPipeMode  mode)
 {
     sp_pipe_handle_store_by_bytes(p, &h, sizeof(h), mode);
 }
 
 static inline HANDLE
-sp_pipe_get_handle(const SpPipe *p)
+sp_win32_pipe_get_handle(const SpPipe *p)
 {
     HANDLE h = NULL;
     sp_pipe_handle_load_by_bytes(p, &h, sizeof(h));
@@ -999,7 +999,7 @@ SPDEF void
 sp_pipe_close(SpPipe *p) SP_NOEXCEPT
 {
     if (!sp_pipe_is_valid(p)) return;
-    HANDLE h = sp_pipe_get_handle(p);
+    HANDLE h = sp_win32_pipe_get_handle(p);
     if (h && h != INVALID_HANDLE_VALUE) CloseHandle(h);
     memset(p, 0, sizeof(*p));
 }
@@ -1019,7 +1019,7 @@ sp_pipe_read(SpPipe *p,
         return 0;
     }
 
-    HANDLE h = sp_pipe_get_handle(p);
+    HANDLE h = sp_win32_pipe_get_handle(p);
     if (!h || h == INVALID_HANDLE_VALUE) return 0;
 
     DWORD got = 0;
@@ -1056,7 +1056,7 @@ sp_pipe_write(SpPipe     *p,
         return 0;
     }
 
-    HANDLE h = sp_pipe_get_handle(p);
+    HANDLE h = sp_win32_pipe_get_handle(p);
     if (!h || h == INVALID_HANDLE_VALUE) return 0;
 
     DWORD wrote = 0;
@@ -1121,7 +1121,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         close_stdin_child_end = 1;
 
         // parent writes:
-        sp_pipe_set_handle(stdin_out, parent_end, SP_PIPE_WRITE);
+        sp_win32_pipe_set_handle(stdin_out, parent_end, SP_PIPE_WRITE);
     } else {
         if (!sp_win32_apply_redir(&cmd->stdio.stdin_redir, 1, &h_in, &close_in)) {
             sp_win32_log_last_error("Failed to apply stdin redirection");
@@ -1142,7 +1142,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         close_stdout_child_end = 1;
 
         // parent reads:
-        sp_pipe_set_handle(stdout_out, parent_end, SP_PIPE_READ);
+        sp_win32_pipe_set_handle(stdout_out, parent_end, SP_PIPE_READ);
     } else {
         if (!sp_win32_apply_redir(&cmd->stdio.stdout_redir, 0, &h_out, &close_out)) {
             sp_win32_log_last_error("Failed to apply stdout redirection");
@@ -1164,7 +1164,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         stderr_child_end = child_end;
         close_stderr_child_end = 1;
 
-        sp_pipe_set_handle(stderr_out, parent_end, SP_PIPE_READ);
+        sp_win32_pipe_set_handle(stderr_out, parent_end, SP_PIPE_READ);
     } else {
         if (cmd->stdio.stderr_redir.kind == SP_REDIR_INHERIT) {
             h_err = GetStdHandle(STD_ERROR_HANDLE);
@@ -1223,7 +1223,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     CloseHandle(proc_info.hThread);
     {
         SpProc proc = SP_ZERO_INIT;
-        sp_proc_set_handle(&proc, proc_info.hProcess);
+        sp_win32_proc_set_handle(&proc, proc_info.hProcess);
         return proc;
     }
 
@@ -1259,7 +1259,7 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
         return -1;
     }
 
-    HANDLE h = sp_proc_get_handle(proc);
+    HANDLE h = sp_win32_proc_get_handle(proc);
     if (h == NULL) {
         SP_LOG_ERROR("sp_proc_wait got NULL HANDLE");
         memset(proc, 0, sizeof(*proc));
@@ -1309,14 +1309,14 @@ typedef char sp_native_fits_handle[(SP_NATIVE_MAX >= sizeof(pid_t)) ? 1 : -1];
 
 
 static inline void
-sp_proc_set_handle(SpProc *proc,
-                   pid_t   pid)
+sp_posix_proc_set_handle(SpProc *proc,
+                         pid_t   pid)
 {
     sp_proc_handle_store_by_bytes(proc, &pid, sizeof(pid));
 }
 
 static inline pid_t
-sp_proc_get_handle(SpProc *proc)
+sp_posix_proc_get_handle(SpProc *proc)
 {
     pid_t pid = (pid_t)0;
     sp_proc_handle_load_by_bytes(proc, &pid, sizeof(pid));
@@ -1324,15 +1324,15 @@ sp_proc_get_handle(SpProc *proc)
 }
 
 static inline void
-sp_pipe_set_handle(SpPipe     *p,
-                   int         fd,
-                   SpPipeMode  mode)
+sp_posix_pipe_set_handle(SpPipe     *p,
+                         int         fd,
+                         SpPipeMode  mode)
 {
     sp_pipe_handle_store_by_bytes(p, &fd, sizeof(fd), mode);
 }
 
 static inline int
-sp_pipe_get_handle(const SpPipe *p)
+sp_posix_pipe_get_handle(const SpPipe *p)
 {
     int fd = -1;
     sp_pipe_handle_load_by_bytes(p, &fd, sizeof(fd));
@@ -1496,7 +1496,7 @@ SPDEF void
 sp_pipe_close(SpPipe *p) SP_NOEXCEPT
 {
     if (!sp_pipe_is_valid(p)) return;
-    int fd = sp_pipe_get_handle(p);
+    int fd = sp_posix_pipe_get_handle(p);
     if (fd >= 0) (void)close(fd);
     memset(p, 0, sizeof(*p));
 }
@@ -1515,7 +1515,7 @@ sp_pipe_read(SpPipe *p,
         return 0;
     }
 
-    int fd = sp_pipe_get_handle(p);
+    int fd = sp_posix_pipe_get_handle(p);
     if (fd < 0) return 0;
 
     // POSIX read returns 0 on EOF.
@@ -1537,7 +1537,7 @@ SPDEF int
 sp_pipe_write(SpPipe     *p,
               const void *buf,
               size_t      len,
-              size_t *out_n) SP_NOEXCEPT
+              size_t     *out_n) SP_NOEXCEPT
 {
     SP_ASSERT(out_n);
     *out_n = 0;
@@ -1547,7 +1547,7 @@ sp_pipe_write(SpPipe     *p,
         return 0;
     }
 
-    int fd = sp_pipe_get_handle(p);
+    int fd = sp_posix_pipe_get_handle(p);
     if (fd < 0) return 0;
 
     ssize_t wrote;
@@ -1600,7 +1600,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
             sp_posix_log_errno("pipe(stdin) failed");
             goto fail;
         }
-        sp_pipe_set_handle(stdin_out, stdin_parent_end, SP_PIPE_WRITE);
+        sp_posix_pipe_set_handle(stdin_out, stdin_parent_end, SP_PIPE_WRITE);
     } else if (cmd->stdio.stdin_redir.kind == SP_REDIR_NULL) {
         in_fd = sp_posix_open_null(/*is_stdin=*/1);
         if (in_fd < 0) { sp_posix_log_errno("open(/dev/null for stdin) failed"); goto fail; }
@@ -1617,7 +1617,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
             sp_posix_log_errno("pipe(stdout) failed");
             goto fail;
         }
-        sp_pipe_set_handle(stdout_out, stdout_parent_end, SP_PIPE_READ);
+        sp_posix_pipe_set_handle(stdout_out, stdout_parent_end, SP_PIPE_READ);
     } else if (cmd->stdio.stdout_redir.kind == SP_REDIR_NULL) {
         out_fd = sp_posix_open_null(/*is_stdin=*/0);
         if (out_fd < 0) { sp_posix_log_errno("open(/dev/null for stdout) failed"); goto fail; }
@@ -1635,7 +1635,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
             sp_posix_log_errno("pipe(stderr) failed");
             goto fail;
         }
-        sp_pipe_set_handle(stderr_out, stderr_parent_end, SP_PIPE_READ);
+        sp_posix_pipe_set_handle(stderr_out, stderr_parent_end, SP_PIPE_READ);
     } else if (cmd->stdio.stderr_redir.kind == SP_REDIR_NULL) {
         err_fd = sp_posix_open_null(/*is_stdin=*/0);
         if (err_fd < 0) { sp_posix_log_errno("open(/dev/null for stderr) failed"); goto fail; }
@@ -1669,7 +1669,8 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     }
 
     if (pid == 0) {
-        // ---- Child ----
+        // I am the child
+
         // stdin
         if (cmd->stdio.stdin_redir.kind == SP_REDIR_PIPE) {
             (void)close(stdin_parent_end);
@@ -1712,7 +1713,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         _exit(127);
     }
 
-    // ---- Parent ----
+    // I am the parent
     SP_FREE(argv);
 
     // Close child ends in parent
@@ -1727,7 +1728,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
 
     {
         SpProc proc = SP_ZERO_INIT;
-        sp_proc_set_handle(&proc, pid);
+        sp_posix_proc_set_handle(&proc, pid);
         return proc;
     }
 
@@ -1761,7 +1762,7 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
         return -1;
     }
 
-    pid_t pid = sp_proc_get_handle(proc);
+    pid_t pid = sp_posix_proc_get_handle(proc);
     if (pid <= 0) {
         SP_LOG_ERROR("%s", "sp_proc_wait got invalid pid");
         memset(proc, 0, sizeof(*proc));
