@@ -2,7 +2,7 @@
  * sp.h — Cross-platform API for subprocess management,
  *        targeting Windows and POSIX.
  *
- * Version: 0.1.0
+ * Version: 1.0.0
  *
  * ~~ LIBRARY INTEGRATION ~~
  * `sp.h` is a single-header C and C++ library, and can easily be integrated
