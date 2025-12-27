@@ -2277,11 +2277,11 @@ sp_batch_exec_sync(Sp_CmdBatch  *batch,
 #      define SP_INTERNAL_DEF extern
 #    endif
 #    if defined(_M_IX86)
-#      pragma comment(linker, "/INCLUDE:_sp_internal_embedded_license")
-#      pragma comment(linker, "/INCLUDE:_sp_internal_embedded_license_ptr")
+#      pragma comment(linker, "/INCLUDE:_sp_embedded_license")
+#      pragma comment(linker, "/INCLUDE:_sp_embedded_license_ptr")
 #    else
-#      pragma comment(linker, "/INCLUDE:sp_internal_embedded_license")
-#      pragma comment(linker, "/INCLUDE:sp_internal_embedded_license_ptr")
+#      pragma comment(linker, "/INCLUDE:sp_embedded_license")
+#      pragma comment(linker, "/INCLUDE:sp_embedded_license_ptr")
 #    endif
 #  else /* GCC / Clang */
 #    if defined(__APPLE__) || defined(__MACH__)
@@ -2298,7 +2298,7 @@ extern "C" {
 #  endif
 
 SP_INTERNAL_DEF SP_INTERNAL_ALLOCATE_LICENSE
-const char sp_internal_embedded_license[] =
+const char sp_embedded_license[] =
     "sp.h\n"
     "\n"
     "BSD-3-CLAUSE LICENSE\n"
@@ -2316,7 +2316,7 @@ const char sp_internal_embedded_license[] =
     "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n";
 
 SP_INTERNAL_DEF SP_INTERNAL_USED
-const char *sp_internal_embedded_license_ptr = sp_internal_embedded_license;
+const char *sp_embedded_license_ptr = sp_embedded_license;
 
 #  ifdef __cplusplus
 } /* extern "C" */
