@@ -640,6 +640,20 @@ MT_DEFINE_TEST(cmd_reset_clears_pipe_config)
     sp_cmd_free(&cmd);
 }
 
+MT_DEFINE_TEST(cmd_multiple_args_in_one)
+{
+    SpCmd cmd = SP_ZERO_INIT;
+
+    sp_cmd_add_args(&cmd, "foo", "bar", "baz");
+    MT_ASSERT_THAT(cmd.args.size == 3);
+    sp_cmd_add_args(&cmd, "foo");
+    MT_ASSERT_THAT(cmd.args.size == 4);
+
+   const char *some_args[] = {"hello", "world"};
+   sp_cmd_add_args_n(&cmd, some_args, 2);
+   MT_ASSERT_THAT(cmd.args.size == 6);
+}
+
 int
 main(int     argc,
      char  **argv)
@@ -665,6 +679,7 @@ main(int     argc,
     MT_RUN_TEST(stdout_pipe_large_output);
     MT_RUN_TEST(cmd_reset_clears_stdio_and_args);
     MT_RUN_TEST(cmd_reset_clears_pipe_config);
+    MT_RUN_TEST(cmd_multiple_args_in_one);
 
     MT_PRINT_SUMMARY();
     return MT_EXIT_CODE;
