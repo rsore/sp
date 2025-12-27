@@ -2,7 +2,7 @@
  * sp.h — Cross-platform API for subprocess management,
  *        targeting Windows and POSIX.
  *
- * Version: 1.1.0
+ * Version: 1.2.0
  *
  * ~~ LIBRARY INTEGRATION ~~
  * `sp.h` is a single-header C and C++ library, and can easily be integrated
@@ -218,16 +218,21 @@ SPDEF void sp_cmd_redirect_stdin_pipe(SpCmd *cmd, SpPipe *out_write) SP_NOEXCEPT
 SPDEF void sp_cmd_redirect_stdout_pipe(SpCmd *cmd, SpPipe *out_read) SP_NOEXCEPT; // parent reads  <- child stdout. *out_read  becomes valid after successful exec
 SPDEF void sp_cmd_redirect_stderr_pipe(SpCmd *cmd, SpPipe *out_read) SP_NOEXCEPT; // parent reads  <- child stderr. *out_read  becomes valid after successful exec
 
+// Resets to no args, but does not free underlying memory
+SPDEF void sp_cmd_reset(SpCmd *cmd) SP_NOEXCEPT;
+// Resets cmd, and frees underlying memory
+SPDEF void sp_cmd_free(SpCmd *cmd) SP_NOEXCEPT;
+
 // Run cmd asynchronously in a subprocess, returns process handle.
 // Must manually sp_proc_wait() for it later.
 SP_NODISCARD SPDEF SpProc sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT;
 // Run cmd synchronously in a subprocess, returns exit code of subprocess
 SPDEF int sp_cmd_exec_sync(SpCmd *cmd) SP_NOEXCEPT;
 
-// Resets to no args, but does not free underlying memory
-SPDEF void sp_cmd_reset(SpCmd *cmd) SP_NOEXCEPT;
-// Resets cmd, and frees underlying memory
-SPDEF void sp_cmd_free(SpCmd *cmd) SP_NOEXCEPT;
+// Detach process so it can no longer be waited on.
+// On Windows: closes underlying handle.
+// On POSIX: forgets pid (Note: The child may become a zombie until parent exits).
+SPDEF void sp_proc_detach(SpProc *proc) SP_NOEXCEPT;
 
 // Wait for subprocess in flight to exit, returning its exit code
 SPDEF int sp_proc_wait(SpProc *proc) SP_NOEXCEPT;
@@ -615,7 +620,7 @@ sp_cmd_add_arg(SpCmd      *cmd,
 }
 
 SPDEF void
-sp_cmd_add_args_impl_(SpCmd      *cmd,
+sp_cmd_add_args_impl_(SpCmd         *cmd,
                          const char *new_arg1,
                                      ...) SP_NOEXCEPT
 {
@@ -1340,19 +1345,26 @@ fail:
     }
 }
 
+SPDEF void
+sp_proc_detach(SpProc *proc) SP_NOEXCEPT
+{
+    if (!sp_internal_proc_is_valid(proc)) return;
+
+    HANDLE h = sp_internal_win32_proc_get_handle(proc);
+    if (h) CloseHandle(h);
+
+    sp_internal_win32_proc_set_handle(proc, 0);
+    proc->handle_size = 0;
+}
+
 SPDEF int
 sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 {
-    SP_ASSERT(proc);
-
-    if (!sp_internal_proc_is_valid(proc)) {
-        sp_internal_log_error("sp_proc_wait called on invalid process handle");
-        return -1;
-    }
+    if (!proc)                            return -1;
+    if (!sp_internal_proc_is_valid(proc)) return -1;
 
     HANDLE h = sp_internal_win32_proc_get_handle(proc);
     if (h == NULL) {
-        sp_internal_log_error("sp_proc_wait got NULL HANDLE");
         memset(proc, 0, sizeof(*proc));
         return -1;
     }
@@ -1365,7 +1377,6 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
         return -1;
     }
     if (w != WAIT_OBJECT_0) {
-        // Unexpected, but not a GetLastError()-style failure
         sp_internal_log_error("WaitForSingleObject returned unexpected status: 0x%lX", (unsigned long)w);
         CloseHandle(h);
         memset(proc, 0, sizeof(*proc));
@@ -1846,19 +1857,27 @@ fail:
     }
 }
 
+SPDEF void
+sp_proc_detach(SpProc *proc) SP_NOEXCEPT
+{
+    if (!sp_internal_proc_is_valid(proc)) return;
+
+    pid_t pid = sp_internal_posix_proc_get_handle(proc);
+    SP_ASSERT(proc->handle_size == sizeof(pid_t));
+    (void)pid;
+
+    sp_internal_posix_proc_set_handle(proc, 0);
+    proc->handle_size = 0;
+}
+
 SPDEF int
 sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 {
-    SP_ASSERT(proc);
-
-    if (!sp_internal_proc_is_valid(proc)) {
-        sp_internal_log_info("%s", "sp_proc_wait called on invalid process handle");
-        return -1;
-    }
+    if (!proc)                            return -1;
+    if (!sp_internal_proc_is_valid(proc)) return -1;
 
     pid_t pid = sp_internal_posix_proc_get_handle(proc);
     if (pid <= 0) {
-        sp_internal_log_info("%s", "sp_proc_wait got invalid pid");
         memset(proc, 0, sizeof(*proc));
         return -1;
     }
@@ -1870,21 +1889,18 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
     } while (r < 0 && errno == EINTR);
 
     if (r < 0) {
-        sp_internal_posix_log_errno("waitpid failed");
+        sp_internal_posix_log_errno("sp_proc_wait: waitpid failed");
         memset(proc, 0, sizeof(*proc));
         return -1;
     }
 
     memset(proc, 0, sizeof(*proc));
 
-    if (WIFEXITED(status)) return WEXITSTATUS(status);
-    if (WIFSIGNALED(status)) {
-        // Common convention: 128 + signal number
-        return 128 + WTERMSIG(status);
-    }
+    if (WIFEXITED(status))   return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+
     return -1;
 }
-
 
 #endif // SP_POSIX
 

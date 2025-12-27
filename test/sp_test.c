@@ -110,6 +110,21 @@ normalize_newlines(char *s)
 }
 
 static inline int
+file_exists(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    fclose(f);
+    return 1;
+}
+
+static inline void
+file_remove(const char *path)
+{
+    (void)remove(path);
+}
+
+static inline int
 file_read_all(const char  *path,
               char        *buf,
               size_t       cap)
@@ -245,6 +260,23 @@ sp_child_main(int     argc,
     if (strcmp(mode, "sleep-ms") == 0) {
         int ms = (argc >= 4) ? atoi(argv[3]) : 10;
         sp_sleep_ms(ms);
+        return 0;
+    }
+
+    if (strcmp(mode, "write-file-after-sleep") == 0) {
+        if (argc < 6) return 2;
+
+        const char *path = argv[3];
+        const char *text = argv[4];
+        int ms = atoi(argv[5]);
+
+        sp_sleep_ms(ms);
+
+        FILE *f = fopen(path, "wb");
+        if (!f) return 4;
+        fputs(text, f);
+        fclose(f);
+
         return 0;
     }
 
@@ -655,6 +687,55 @@ MT_DEFINE_TEST(cmd_multiple_args_in_one)
    MT_ASSERT_THAT(cmd.args.size == 6);
 }
 
+MT_DEFINE_TEST(proc_detach_allows_child_to_finish)
+{
+    ensure_out_dir();
+
+    char self[1024] = SP_ZERO_INIT;
+    MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
+
+    const char *path = "sp_test_out" SP_PATH_SEP "detach.txt";
+    file_remove(path);
+
+    SpCmd cmd = SP_ZERO_INIT;
+
+    sp_cmd_redirect_stdin_null(&cmd);
+    sp_cmd_redirect_stdout_null(&cmd);
+    sp_cmd_redirect_stderr_null(&cmd);
+
+    sp_cmd_add_arg(&cmd, self);
+    sp_cmd_add_arg(&cmd, "--sp-child");
+    sp_cmd_add_arg(&cmd, "write-file-after-sleep");
+    sp_cmd_add_arg(&cmd, path);
+    sp_cmd_add_arg(&cmd, "DETACH_OK\n");
+    sp_cmd_add_arg(&cmd, "100");
+
+    SpProc p = sp_cmd_exec_async(&cmd);
+
+    sp_proc_detach(&p);
+    sp_proc_detach(&p);
+
+    char buf[1024] = SP_ZERO_INIT;
+    int ok = 0;
+
+    for (int i = 0; i < 200; i++) {
+        if (file_exists(path)) {
+            if (file_read_all(path, buf, sizeof(buf))) {
+                normalize_newlines(buf);
+                if (str_contains(buf, "DETACH_OK\n")) {
+                    ok = 1;
+                    break;
+                }
+            }
+        }
+        sp_sleep_ms(10);
+    }
+
+    MT_CHECK_THAT(ok);
+
+    sp_cmd_free(&cmd);
+}
+
 int
 main(int     argc,
      char  **argv)
@@ -681,6 +762,7 @@ main(int     argc,
     MT_RUN_TEST(cmd_reset_clears_stdio_and_args);
     MT_RUN_TEST(cmd_reset_clears_pipe_config);
     MT_RUN_TEST(cmd_multiple_args_in_one);
+    MT_RUN_TEST(proc_detach_allows_child_to_finish);
 
     MT_PRINT_SUMMARY();
     return MT_EXIT_CODE;
