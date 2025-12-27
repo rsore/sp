@@ -3,6 +3,7 @@
 #endif
 
 #define SP_IMPLEMENTATION
+#define SP_EMBED_LICENSE
 #define SPDEF static inline
 #include "../sp.h"
 

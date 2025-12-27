@@ -14,6 +14,8 @@
  * Certain behavior of `sp.h` can be customized by defining some
  * preprocessor definitions before including the `sp.h`:
  *  - SP_IMPLEMENTATION .......................... Include all function definitions.
+ *  - SP_EMBED_LICENSE ........................... Embeds BSD-3-Clause license text
+ *                                                 in the program binary.
  *  - SPDEF ...................................... Prefixed to all functions.
  *                                                 Example: `#define SPDEF static inline`
  *                                                 Default: Nothing
@@ -1843,6 +1845,93 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
 
 #endif // SP_POSIX
 
+
+
+#if defined(SP_EMBED_LICENSE)
+/**
+ * LICENSE EMBEDDING
+ * If SP_EMBED_LICENSE is defined in the same translation unit as
+ * SP_IMPLEMENTATION, sp.h embeds its BSD-3-Clause license text into the
+ * final program binary (as a static string).
+ *
+ * This can make it easier to satisfy license notice requirements for
+ * binary distributions. You are still responsible for complying with the
+ * BSD-3-Clause terms for your distribution.
+ *
+ * The author of this library considers embedding this notice in the
+ * binary to be an acceptable way of reproducing the license text.
+ */
+
+
+// Must be implementation TU
+#  if !defined(SP_IMPLEMENTATION)
+#    error "SP_EMBED_LICENSE must be defined in the same translation unit as SP_IMPLEMENTATION."
+#  endif
+
+// Toolchain check
+#  if !defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
+#    error "SP_EMBED_LICENSE is not supported on this toolchain (supported: MSVC, clang, GCC)."
+#  endif
+
+
+// toolchain / platform attributes
+#  if defined(_MSC_VER)
+#    pragma section(".sp_lic", read)
+#    define SP_INTERNAL_ALLOCATE_LICENSE __declspec(allocate(".sp_lic"))
+#    define SP_INTERNAL_USED
+#    ifdef __cplusplus
+#      define SP_INTERNAL_DEF extern "C"
+#    else
+#      define SP_INTERNAL_DEF extern
+#    endif
+#    if defined(_M_IX86)
+#      pragma comment(linker, "/INCLUDE:_sp_internal_embedded_license")
+#      pragma comment(linker, "/INCLUDE:_sp_internal_embedded_license_ptr")
+#    else
+#      pragma comment(linker, "/INCLUDE:sp_internal_embedded_license")
+#      pragma comment(linker, "/INCLUDE:sp_internal_embedded_license_ptr")
+#    endif
+#  else /* GCC / Clang */
+#    if defined(__APPLE__) || defined(__MACH__)
+#      define SP_INTERNAL_ALLOCATE_LICENSE __attribute__((section("__DATA,__sp_lic"), used))
+#    else
+#      define SP_INTERNAL_ALLOCATE_LICENSE __attribute__((section(".sp_lic"), used))
+#    endif
+#    define SP_INTERNAL_USED __attribute__((used))
+#    define SP_INTERNAL_DEF
+#  endif
+
+#  ifdef __cplusplus
+extern "C" {
+#  endif
+
+SP_INTERNAL_DEF SP_INTERNAL_ALLOCATE_LICENSE
+const char sp_internal_embedded_license[] =
+    "sp.h\n"
+    "\n"
+    "BSD-3-CLAUSE LICENSE\n"
+    "\n"
+    "Copyright 2025 rsore\n"
+    "\n"
+    "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:\n"
+    "\n"
+    "1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.\n"
+    "\n"
+    "2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.\n"
+    "\n"
+    "3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.\n"
+    "\n"
+    "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n";
+
+SP_INTERNAL_DEF SP_INTERNAL_USED
+const char *sp_internal_embedded_license_ptr = sp_internal_embedded_license;
+
+#  ifdef __cplusplus
+} /* extern "C" */
+#  endif
+
+#endif // SP_EMBED_LICENSE
+
 #endif // SP_IMPLEMENTATION
 
 #endif // SP_H_INCLUDED_
@@ -1860,5 +1949,5 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
  *
  * 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
