@@ -188,6 +188,25 @@ build_self_child(Sp_Cmd     *cmd,
     if (arg) sp_cmd_add_arg(cmd, arg);
 }
 
+
+static inline void
+build_self_child_write_file_exit(Sp_Cmd     *cmd,
+                                 const char *self,
+                                 const char *path,
+                                 const char *content,
+                                 int         exit_code)
+{
+    char code_buf[32];
+    snprintf(code_buf, sizeof(code_buf), "%d", exit_code);
+
+    sp_cmd_add_arg(cmd, self);
+    sp_cmd_add_arg(cmd, "--sp-child");
+    sp_cmd_add_arg(cmd, "write-file-exit");
+    sp_cmd_add_arg(cmd, path);
+    sp_cmd_add_arg(cmd, content);
+    sp_cmd_add_arg(cmd, code_buf);
+}
+
 static inline int
 sp_child_main(int     argc,
               char  **argv)
@@ -263,7 +282,22 @@ sp_child_main(int     argc,
         return 0;
     }
 
-    if (strcmp(mode, "write-file-after-sleep") == 0) {
+        if (strcmp(mode, "write-file-exit") == 0) {
+        if (argc < 6) return 2;
+
+        const char *path = argv[3];
+        const char *text = argv[4];
+        int exit_code = atoi(argv[5]);
+
+        FILE *f = fopen(path, "wb");
+        if (!f) return 4;
+        fputs(text, f);
+        fclose(f);
+
+        return exit_code;
+    }
+
+if (strcmp(mode, "write-file-after-sleep") == 0) {
         if (argc < 6) return 2;
 
         const char *path = argv[3];
@@ -738,6 +772,57 @@ MT_DEFINE_TEST(proc_detach_allows_child_to_finish)
     sp_cmd_free(&cmd);
 }
 
+MT_DEFINE_TEST(batch_exec_sync_fail_fast_sequential)
+{
+    ensure_out_dir();
+
+    char self[1024] = SP_ZERO_INIT;
+    MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
+
+    const char *p1 = "sp_test_out" SP_PATH_SEP "batch_1.txt";
+    const char *p2 = "sp_test_out" SP_PATH_SEP "batch_2.txt";
+    const char *p3 = "sp_test_out" SP_PATH_SEP "batch_3.txt";
+
+    (void)remove(p1);
+    (void)remove(p2);
+    (void)remove(p3);
+
+    Sp_CmdBatch batch = SP_ZERO_INIT;
+    Sp_Cmd      cmd   = SP_ZERO_INIT;
+
+    sp_cmd_reset(&cmd);
+    sp_cmd_redirect_stdin_null(&cmd);
+    sp_cmd_redirect_stdout_null(&cmd);
+    sp_cmd_redirect_stderr_null(&cmd);
+    build_self_child_write_file_exit(&cmd, self, p1, "OK1\n", 0);
+    sp_batch_add_cmd(&batch, &cmd);
+
+    sp_cmd_reset(&cmd);
+    sp_cmd_redirect_stdin_null(&cmd);
+    sp_cmd_redirect_stdout_null(&cmd);
+    sp_cmd_redirect_stderr_null(&cmd);
+    build_self_child_write_file_exit(&cmd, self, p2, "FAIL2\n", 7);
+    sp_batch_add_cmd(&batch, &cmd);
+
+    sp_cmd_reset(&cmd);
+    sp_cmd_redirect_stdin_null(&cmd);
+    sp_cmd_redirect_stdout_null(&cmd);
+    sp_cmd_redirect_stderr_null(&cmd);
+    build_self_child_write_file_exit(&cmd, self, p3, "SHOULD_NOT_RUN\n", 0);
+    sp_batch_add_cmd(&batch, &cmd);
+
+    int code = sp_batch_exec_sync(&batch, 1);
+    MT_CHECK_THAT(code == 7);
+
+    MT_CHECK_THAT(file_exists(p1));
+    MT_CHECK_THAT(file_exists(p2));
+    MT_CHECK_THAT(!file_exists(p3));
+
+    sp_cmd_free(&cmd);
+    sp_batch_free(&batch);
+}
+
+
 int
 main(int     argc,
      char  **argv)
@@ -765,6 +850,7 @@ main(int     argc,
     MT_RUN_TEST(cmd_reset_clears_pipe_config);
     MT_RUN_TEST(cmd_multiple_args_in_one);
     MT_RUN_TEST(proc_detach_allows_child_to_finish);
+    MT_RUN_TEST(batch_exec_sync_fail_fast_sequential);
 
     MT_PRINT_SUMMARY();
     return MT_EXIT_CODE;

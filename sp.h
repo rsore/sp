@@ -183,6 +183,9 @@ typedef struct {
     size_t  capacity;
 } Sp_Procs;
 
+typedef struct {
+    Sp_Cmds cmds;
+} Sp_CmdBatch;
 
 // Add a single arg to cmd.
 SPDEF void sp_cmd_add_arg(Sp_Cmd *cmd, const char *arg) SP_NOEXCEPT;
@@ -241,6 +244,17 @@ SPDEF void sp_proc_detach(Sp_Proc *proc) SP_NOEXCEPT;
 // Wait for subprocess in flight to exit, returning its exit code
 SPDEF int sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT;
 
+// Add finished cmd object to batch. cmd is copied into batch, and can safely be reset/freed.
+SPDEF void sp_batch_add_cmd(Sp_CmdBatch *batch, const Sp_Cmd *cmd) SP_NOEXCEPT;
+// Run all processes in batch concurrently, with no more than max_parallel processes
+// running at any one time. Aborts early if any process fails. Returns exit code
+// of first failed process, or 0 if all succeeded.
+SPDEF int sp_batch_exec_sync(Sp_CmdBatch *batch, size_t max_parallel) SP_NOEXCEPT;
+// Resets batch object for reuse without deallocating internal memory
+SPDEF void sp_batch_reset(Sp_CmdBatch *batch) SP_NOEXCEPT;
+// Resets and frees batch object and its owned memory.
+SPDEF void sp_batch_free(Sp_CmdBatch *batch) SP_NOEXCEPT;
+
 #ifdef __cplusplus
 }
 #endif
@@ -276,6 +290,7 @@ SPDEF int sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT;
 #  include <errno.h>
 #  include <sys/wait.h>
 #  include <sys/types.h>
+#  include <time.h>
 #endif
 
 
@@ -317,6 +332,13 @@ SPDEF int sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT;
     do {                                                                                                                         \
         sp_darray_grow_to_fit((arr), (arr)->size+1);                                                                             \
         (arr)->buffer[(arr)->size++] = (new_element);                                                                            \
+    } while (0)
+
+#define cap_darray_copy(src, dest)                                                                                               \
+    do {                                                                                                                         \
+        cap_darray_grow_to_fit((dest), (src)->size);                                                                             \
+        memcpy((dest)->buffer, (src)->buffer, (src)->size * sizeof(*(src)->buffer));                                             \
+        (dest)->size = (src)->size;                                                                                              \
     } while (0)
 
 #define sp_darray_free(arr)                                                                                                      \
@@ -434,9 +456,6 @@ sp_internal_string_free(Sp_String *str)
 {
     sp_darray_free(str);
 }
-
-#include <stdarg.h>
-#include <stdio.h>
 
 static inline Sp_String
 sp_internal_vsprint(const char *fmt, va_list ap)
@@ -608,6 +627,74 @@ sp_internal_redirect_free_alloc(Sp_Redirect *r)
         sp_internal_string_free(&r->file_path);
     }
     memset(r, 0, sizeof(*r));
+}
+
+static inline void
+sp_internal_string_clone(Sp_String        *dst,
+                         const Sp_String  *src)
+{
+    SP_ASSERT(dst);
+    SP_ASSERT(src);
+
+    memset(dst, 0, sizeof(Sp_String));
+
+    if (!src->buffer || src->size == 0) {
+        return;
+    }
+
+    dst->buffer = (char *)SP_REALLOC(NULL, src->size + 1);
+    SP_ASSERT(dst->buffer);
+
+    memcpy(dst->buffer, src->buffer, src->size);
+    dst->buffer[src->size] = '\0';
+
+    dst->size     = src->size;
+    dst->capacity = src->size + 1;
+}
+
+static inline void
+sp_internal_redirect_clone(Sp_Redirect        *dst,
+                           const Sp_Redirect  *src)
+{
+    SP_ASSERT(dst);
+    SP_ASSERT(src);
+
+    memset(dst, 0, sizeof(Sp_Redirect));
+
+    dst->kind = src->kind;
+
+    SP_ASSERT(dst->kind != SP_REDIR_PIPE);
+
+    dst->file_mode = src->file_mode;
+    sp_internal_string_clone(&dst->file_path, &src->file_path);
+
+    dst->out_pipe = NULL;
+}
+
+static inline void
+sp_internal_cmd_clone(Sp_Cmd        *dst,
+                      const Sp_Cmd  *src)
+{
+    SP_ASSERT(dst);
+    SP_ASSERT(src);
+
+    memset(dst, 0, sizeof(Sp_Cmd));
+
+    SP_ASSERT(src->stdio.stdin_redir.kind  != SP_REDIR_PIPE);
+    SP_ASSERT(src->stdio.stdout_redir.kind != SP_REDIR_PIPE);
+    SP_ASSERT(src->stdio.stderr_redir.kind != SP_REDIR_PIPE);
+
+    for (size_t i = 0; i < src->args.size; i++) {
+        Sp_String s = SP_ZERO_INIT;
+        sp_internal_string_clone(&s, &src->args.buffer[i]);
+        sp_darray_append(&dst->args, s);
+    }
+
+    dst->internal_strings_already_initted = dst->args.size;
+
+    sp_internal_redirect_clone(&dst->stdio.stdin_redir,  &src->stdio.stdin_redir);
+    sp_internal_redirect_clone(&dst->stdio.stdout_redir, &src->stdio.stdout_redir);
+    sp_internal_redirect_clone(&dst->stdio.stderr_redir, &src->stdio.stderr_redir);
 }
 
 SPDEF void
@@ -788,6 +875,40 @@ sp_cmd_free(Sp_Cmd *cmd) SP_NOEXCEPT
     sp_internal_redirect_free_alloc(&cmd->stdio.stderr_redir);
 }
 
+SPDEF
+void sp_batch_add_cmd(Sp_CmdBatch  *batch,
+                      const Sp_Cmd *cmd) SP_NOEXCEPT
+{
+    SP_ASSERT(batch);
+    SP_ASSERT(cmd);
+
+    Sp_Cmd copy = SP_ZERO_INIT;
+    sp_internal_cmd_clone(&copy, cmd);
+
+    sp_darray_append(&batch->cmds, copy);
+}
+
+SPDEF void
+sp_batch_reset(Sp_CmdBatch *batch) SP_NOEXCEPT
+{
+    if (!batch) return;
+
+    for (size_t i = 0; i < batch->cmds.size; i++) {
+        sp_cmd_free(&batch->cmds.buffer[i]);
+    }
+
+    batch->cmds.size = 0;
+}
+
+SPDEF void
+sp_batch_free(Sp_CmdBatch *batch) SP_NOEXCEPT
+{
+    if (!batch) return;
+
+    sp_batch_reset(batch);
+    sp_darray_free(&batch->cmds);
+    memset(batch, 0, sizeof(Sp_CmdBatch));
+}
 
 /**
  * Windows implementation follows
@@ -1094,6 +1215,88 @@ sp_internal_win32_make_pipe(HANDLE *out_parent_end,
         *out_parent_end = write_h;
         *out_child_end  = read_h;
         return 1;
+    }
+}
+
+static inline int
+sp_internal_win32_proc_is_done(Sp_Proc  *proc,
+                               int    *out_exit_code)
+{
+    SP_ASSERT(proc);
+    SP_ASSERT(out_exit_code);
+
+    HANDLE h = sp_internal_win32_proc_get_handle(proc);
+    if (!h) return 0;
+
+    DWORD w = WaitForSingleObject(h, 0);
+    if (w == WAIT_TIMEOUT) return 0;
+
+    if (w != WAIT_OBJECT_0) {
+        if (w == WAIT_FAILED) {
+            sp_internal_win32_log_last_error("WaitForSingleObject failed");
+        } else {
+            sp_internal_log_error("WaitForSingleObject returned unexpected status: 0x%lX", (unsigned long)w);
+        }
+        *out_exit_code = -1;
+        return 1;
+    }
+
+    DWORD exit_code = 0;
+    if (!GetExitCodeProcess(h, &exit_code)) {
+        sp_internal_win32_log_last_error("GetExitCodeProcess failed");
+        *out_exit_code = -1;
+        return 1;
+    }
+
+    *out_exit_code = (int)exit_code;
+    return 1;
+}
+
+static inline int
+sp_internal_procs_wait_any(Sp_Procs  *running,
+                           size_t   *out_index,
+                           int      *out_exit_code)
+{
+    SP_ASSERT(running);
+    SP_ASSERT(out_index);
+    SP_ASSERT(out_exit_code);
+    SP_ASSERT(running->size > 0);
+
+    if (running->size <= MAXIMUM_WAIT_OBJECTS) {
+        HANDLE hs[MAXIMUM_WAIT_OBJECTS];
+
+        for (size_t i = 0; i < running->size; i++) {
+            hs[i] = sp_internal_win32_proc_get_handle(&running->buffer[i]);
+        }
+
+        DWORD w = WaitForMultipleObjects((DWORD)running->size, hs, FALSE, INFINITE);
+        if (w == WAIT_FAILED) {
+            sp_internal_win32_log_last_error("WaitForMultipleObjects failed");
+            return 0;
+        }
+
+        DWORD idx = w - WAIT_OBJECT_0;
+        if (idx >= (DWORD)running->size) {
+            sp_internal_log_error("WaitForMultipleObjects returned unexpected status: 0x%lX", (unsigned long)w);
+            return 0;
+        }
+
+        *out_index = (size_t)idx;
+        *out_exit_code = sp_proc_wait(&running->buffer[*out_index]);
+        return 1;
+    }
+
+    for (;;) {
+        for (size_t i = 0; i < running->size; i++) {
+            int code = 0;
+            if (sp_internal_win32_proc_is_done(&running->buffer[i], &code)) {
+                (void)sp_proc_wait(&running->buffer[i]);
+                *out_index = i;
+                *out_exit_code = code;
+                return 1;
+            }
+        }
+        Sleep(1);
     }
 }
 
@@ -1601,6 +1804,74 @@ sp_internal_posix_quote_cmd(const Sp_Cmd *cmd)
 }
 
 
+static inline int
+sp_internal_posix_status_to_exit_code(int status)
+{
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    return -1;
+}
+
+static inline int
+sp_internal_posix_wait_status_to_exit_code(int status)
+{
+    if (WIFEXITED(status))   return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    return -1;
+}
+
+static inline void
+sp_internal_posix_sleep_1ms(void)
+{
+    struct timespec ts;
+    ts.tv_sec  = 0;
+    ts.tv_nsec = 1000000L;
+    (void)nanosleep(&ts, NULL);
+}
+
+static inline int
+sp_internal_procs_wait_any(Sp_Procs  *running,
+                           size_t   *out_index,
+                           int      *out_exit_code)
+{
+    SP_ASSERT(running);
+    SP_ASSERT(out_index);
+    SP_ASSERT(out_exit_code);
+    SP_ASSERT(running->size > 0);
+
+    for (;;) {
+        for (size_t i = 0; i < running->size; i++) {
+            pid_t pid = sp_internal_posix_proc_get_handle(&running->buffer[i]);
+            if (pid <= 0) continue;
+
+            int status = 0;
+            pid_t r;
+            do {
+                r = waitpid(pid, &status, WNOHANG);
+            } while (r < 0 && errno == EINTR);
+
+            if (r == 0) continue;
+
+            if (r < 0) {
+                sp_internal_posix_log_errno("sp_batch_exec_sync: waitpid failed");
+                *out_index = i;
+                *out_exit_code = -1;
+                memset(&running->buffer[i], 0, sizeof(running->buffer[i]));
+                return 1;
+            }
+
+            *out_index = i;
+
+            *out_exit_code = sp_internal_posix_wait_status_to_exit_code(status);
+
+            memset(&running->buffer[i], 0, sizeof(running->buffer[i]));
+            return 1;
+        }
+
+        sp_internal_posix_sleep_1ms();
+    }
+}
+
 SPDEF void
 sp_pipe_close(Sp_Pipe *p) SP_NOEXCEPT
 {
@@ -1901,15 +2172,71 @@ sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT
     }
 
     memset(proc, 0, sizeof(*proc));
-
-    if (WIFEXITED(status))   return WEXITSTATUS(status);
-    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
-
-    return -1;
+    return sp_internal_posix_wait_status_to_exit_code(status);
 }
 
 #endif // SP_POSIX
 
+
+SPDEF int
+sp_batch_exec_sync(Sp_CmdBatch  *batch,
+                   size_t        max_parallel) SP_NOEXCEPT
+{
+    if (!batch) return -1;
+
+    const size_t total = batch->cmds.size;
+    if (total == 0) return 0;
+
+    if (max_parallel == 0 || max_parallel > total) {
+        max_parallel = total;
+    }
+
+    Sp_Procs running   = SP_ZERO_INIT;
+    size_t   next      = 0;
+    int      fail_code = 0;
+
+    while (running.size < max_parallel && next < total) {
+        Sp_Proc p = sp_cmd_exec_async(&batch->cmds.buffer[next]);
+        sp_darray_append(&running, p);
+        next++;
+    }
+
+    while (running.size > 0) {
+        size_t idx = 0;
+        int exit_code = -1;
+
+        if (!sp_internal_procs_wait_any(&running, &idx, &exit_code)) {
+            fail_code = -1;
+            break;
+        }
+
+        if (!sp_internal_proc_is_valid(&running.buffer[idx])) {
+            running.buffer[idx] = running.buffer[running.size - 1];
+            running.size--;
+        } else {
+#if SP_WINDOWS
+            exit_code = sp_proc_wait(&running.buffer[idx]);
+            running.buffer[idx] = running.buffer[running.size - 1];
+            running.size--;
+#endif
+        }
+
+        if (fail_code == 0 && exit_code != 0) {
+            fail_code = exit_code;
+        }
+
+        if (fail_code == 0) {
+            while (running.size < max_parallel && next < total) {
+                Sp_Proc p = sp_cmd_exec_async(&batch->cmds.buffer[next]);
+                sp_darray_append(&running, p);
+                next++;
+            }
+        }
+    }
+
+    sp_darray_free(&running);
+    return fail_code;
+}
 
 
 #if defined(SP_EMBED_LICENSE)
