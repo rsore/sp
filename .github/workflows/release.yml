@@ -34,14 +34,14 @@ jobs:
 
       - name: Clone collection repository
         run: |
-          git clone https://x-access-token:${{ secrets.TARGET_REPO_TOKEN }}@github.com/rsore/rshlc.git rshlc
+          git clone https://x-access-token:${{ secrets.TARGET_REPO_TOKEN }}@github.com/rsore/shc.git shc
 
       - name: Copy file
         run: |
-          cp sp.h rshlc/sp.h
+          cp sp.h shc/sp.h
 
       - name: Commit and push changes
-        working-directory: rshlc
+        working-directory: shc
         run: |
           git add .
           git commit -m "Update sp.h from release $GITHUB_REF_NAME"
