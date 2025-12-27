@@ -685,6 +685,8 @@ MT_DEFINE_TEST(cmd_multiple_args_in_one)
    const char *some_args[] = {"hello", "world"};
    sp_cmd_add_args_n(&cmd, some_args, 2);
    MT_ASSERT_THAT(cmd.args.size == 6);
+
+   sp_cmd_free(&cmd);
 }
 
 MT_DEFINE_TEST(proc_detach_allows_child_to_finish)

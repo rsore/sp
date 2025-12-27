@@ -23,9 +23,13 @@
  *                                                 Default: libc assert.
  *  - SP_LOG_INFO(msg) ........................... Used to print commands as they are run.
  *                                                 msg is NUL-terminated cstr.
+ *                                                 msg is only valid during the callback/macro expansion.
+ *                                                 copy if you need to keep it.
  *                                                 Default: Nothing.
  *  - SP_LOG_ERROR(msg) .......................... Used to print error messages as they occur.
  *                                                 msg is NUL-terminated cstr.
+ *                                                 msg is only valid during the callback/macro expansion.
+ *                                                 copy if you need to keep it.
  *                                                 Default: Nothing.
  *  - SP_REALLOC(ptr, new_size) && SP_FREE(ptr) .. Define custom allocators for `sp.h`.
  *                                                 Must match the semantics of libc realloc and free.
@@ -460,9 +464,11 @@ sp_internal_vsprint(const char *fmt, va_list ap)
     }
 
     buffer[(size_t)need] = '\0';
-    sp_internal_string_append_cstr(&result, buffer);
 
-    SP_FREE(buffer);
+    result.buffer   = buffer;
+    result.size     = (size_t)need;
+    result.capacity = (size_t)need + 1;
+
     return result;
 }
 
