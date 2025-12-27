@@ -145,7 +145,7 @@ str_contains(const char  *haystack,
 }
 
 static inline int
-pipe_read_all(SpPipe  *p,
+pipe_read_all(Sp_Pipe *p,
               char    *buf,
               size_t   cap)
 {
@@ -162,9 +162,9 @@ pipe_read_all(SpPipe  *p,
 }
 
 static inline int
-pipe_write_all(SpPipe        *p,
-               const void    *data,
-               size_t         len)
+pipe_write_all(Sp_Pipe    *p,
+               const void *data,
+               size_t      len)
 {
     const unsigned char *s = (const unsigned char *)data;
     size_t off = 0;
@@ -177,10 +177,10 @@ pipe_write_all(SpPipe        *p,
 }
 
 static inline void
-build_self_child(SpCmd        *cmd,
-                 const char   *self,
-                 const char   *mode,
-                 const char   *arg)
+build_self_child(Sp_Cmd     *cmd,
+                 const char *self,
+                 const char *mode,
+                 const char *arg)
 {
     sp_cmd_add_arg(cmd, self);
     sp_cmd_add_arg(cmd, "--sp-child");
@@ -288,7 +288,7 @@ MT_DEFINE_TEST(exec_sync_exit_code)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd cmd = SP_ZERO_INIT;
+    Sp_Cmd cmd = SP_ZERO_INIT;
     build_self_child(&cmd, self, "exit", "7");
 
     int code = sp_cmd_exec_sync(&cmd);
@@ -302,13 +302,13 @@ MT_DEFINE_TEST(stdout_pipe_captures)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd  cmd = SP_ZERO_INIT;
-    SpPipe out = SP_ZERO_INIT;
+    Sp_Cmd  cmd = SP_ZERO_INIT;
+    Sp_Pipe out = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdout_pipe(&cmd, &out);
     build_self_child(&cmd, self, "stdout", "HELLO_PIPE");
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     char buf[2048] = SP_ZERO_INIT;
     MT_ASSERT_THAT(pipe_read_all(&out, buf, sizeof(buf)));
@@ -328,14 +328,14 @@ MT_DEFINE_TEST(stderr_to_stdout_merge_pipe)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd  cmd = SP_ZERO_INIT;
-    SpPipe out = SP_ZERO_INIT;
+    Sp_Cmd  cmd = SP_ZERO_INIT;
+    Sp_Pipe out = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdout_pipe(&cmd, &out);
     sp_cmd_redirect_stderr_to_stdout(&cmd);
     build_self_child(&cmd, self, "both", NULL);
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     char buf[4096] = SP_ZERO_INIT;
     MT_ASSERT_THAT(pipe_read_all(&out, buf, sizeof(buf)));
@@ -365,14 +365,14 @@ MT_DEFINE_TEST(stdin_from_file)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd  cmd = SP_ZERO_INIT;
-    SpPipe out = SP_ZERO_INIT;
+    Sp_Cmd  cmd = SP_ZERO_INIT;
+    Sp_Pipe out = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdin_from_file(&cmd, "sp_test_out" SP_PATH_SEP "in.txt");
     sp_cmd_redirect_stdout_pipe(&cmd, &out);
     build_self_child(&cmd, self, "echo-stdin", NULL);
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     char buf[2048] = SP_ZERO_INIT;
     MT_ASSERT_THAT(pipe_read_all(&out, buf, sizeof(buf)));
@@ -396,7 +396,7 @@ MT_DEFINE_TEST(stdout_file_trunc)
 
     const char *path = "sp_test_out" SP_PATH_SEP "out_trunc.txt";
 
-    SpCmd cmd = SP_ZERO_INIT;
+    Sp_Cmd cmd = SP_ZERO_INIT;
     sp_cmd_redirect_stdout_to_file(&cmd, path, SP_FILE_WRITE_TRUNC);
     build_self_child(&cmd, self, "stdout", "HELLO_OUT");
 
@@ -421,7 +421,7 @@ MT_DEFINE_TEST(stdout_file_append)
     const char *path = "sp_test_out" SP_PATH_SEP "out_append.txt";
 
     {
-        SpCmd cmd = SP_ZERO_INIT;
+        Sp_Cmd cmd = SP_ZERO_INIT;
         sp_cmd_redirect_stdout_to_file(&cmd, path, SP_FILE_WRITE_TRUNC);
         build_self_child(&cmd, self, "stdout", "LINE1");
         (void)sp_cmd_exec_sync(&cmd);
@@ -429,7 +429,7 @@ MT_DEFINE_TEST(stdout_file_append)
     }
 
     {
-        SpCmd cmd = SP_ZERO_INIT;
+        Sp_Cmd cmd = SP_ZERO_INIT;
         sp_cmd_redirect_stdout_to_file(&cmd, path, SP_FILE_WRITE_APPEND);
         build_self_child(&cmd, self, "stdout", "LINE2");
         (void)sp_cmd_exec_sync(&cmd);
@@ -452,7 +452,7 @@ MT_DEFINE_TEST(stderr_file_trunc)
 
     const char *path = "sp_test_out" SP_PATH_SEP "err_trunc.txt";
 
-    SpCmd cmd = SP_ZERO_INIT;
+    Sp_Cmd cmd = SP_ZERO_INIT;
     sp_cmd_redirect_stderr_to_file(&cmd, path, SP_FILE_WRITE_TRUNC);
     build_self_child(&cmd, self, "stderr", "HELLO_ERR");
 
@@ -472,14 +472,14 @@ MT_DEFINE_TEST(stdout_null_stderr_pipe)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd  cmd = SP_ZERO_INIT;
-    SpPipe err = SP_ZERO_INIT;
+    Sp_Cmd  cmd = SP_ZERO_INIT;
+    Sp_Pipe err = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdout_null(&cmd);
     sp_cmd_redirect_stderr_pipe(&cmd, &err);
     build_self_child(&cmd, self, "stdout", "OUT_SHOULD_BE_NULL");
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     char buf[2048] = SP_ZERO_INIT;
     MT_ASSERT_THAT(pipe_read_all(&err, buf, sizeof(buf)));
@@ -499,14 +499,14 @@ MT_DEFINE_TEST(stdin_null_eof)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd  cmd = SP_ZERO_INIT;
-    SpPipe out = SP_ZERO_INIT;
+    Sp_Cmd  cmd = SP_ZERO_INIT;
+    Sp_Pipe out = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdin_null(&cmd);
     sp_cmd_redirect_stdout_pipe(&cmd, &out);
     build_self_child(&cmd, self, "expect-eof-then-print", NULL);
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     char buf[2048] = SP_ZERO_INIT;
     MT_ASSERT_THAT(pipe_read_all(&out, buf, sizeof(buf)));
@@ -526,15 +526,15 @@ MT_DEFINE_TEST(stdin_pipe_roundtrip)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd  cmd = SP_ZERO_INIT;
-    SpPipe inw = SP_ZERO_INIT;
-    SpPipe out = SP_ZERO_INIT;
+    Sp_Cmd  cmd = SP_ZERO_INIT;
+    Sp_Pipe inw = SP_ZERO_INIT;
+    Sp_Pipe out = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdin_pipe(&cmd, &inw);
     sp_cmd_redirect_stdout_pipe(&cmd, &out);
     build_self_child(&cmd, self, "copy-stdin-to-stdout", NULL);
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     const char *msg = "HELLO_THROUGH_STDIN\nSECOND_LINE\n";
     MT_ASSERT_THAT(pipe_write_all(&inw, msg, strlen(msg)));
@@ -559,13 +559,13 @@ MT_DEFINE_TEST(stdout_pipe_large_output)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd  cmd = SP_ZERO_INIT;
-    SpPipe out = SP_ZERO_INIT;
+    Sp_Cmd  cmd = SP_ZERO_INIT;
+    Sp_Pipe out = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdout_pipe(&cmd, &out);
     build_self_child(&cmd, self, "spam-stdout", "200000");
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     static char buf[262144];
     buf[0] = 0;
@@ -589,7 +589,7 @@ MT_DEFINE_TEST(cmd_reset_clears_stdio_and_args)
 
     const char *path = "sp_test_out" SP_PATH_SEP "reset_out.txt";
 
-    SpCmd cmd = SP_ZERO_INIT;
+    Sp_Cmd cmd = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdout_to_file(&cmd, path, SP_FILE_WRITE_TRUNC);
     build_self_child(&cmd, self, "stdout", "FIRST");
@@ -603,11 +603,11 @@ MT_DEFINE_TEST(cmd_reset_clears_stdio_and_args)
 
     sp_cmd_reset(&cmd);
 
-    SpPipe out = SP_ZERO_INIT;
+    Sp_Pipe out = SP_ZERO_INIT;
     sp_cmd_redirect_stdout_pipe(&cmd, &out);
     build_self_child(&cmd, self, "stdout", "SECOND");
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     char pipebuf[2048] = SP_ZERO_INIT;
     MT_ASSERT_THAT(pipe_read_all(&out, pipebuf, sizeof(pipebuf)));
@@ -632,14 +632,14 @@ MT_DEFINE_TEST(cmd_reset_clears_pipe_config)
     char self[1024] = SP_ZERO_INIT;
     MT_ASSERT_THAT(get_self_path(self, sizeof(self), g_argv0));
 
-    SpCmd cmd = SP_ZERO_INIT;
+    Sp_Cmd cmd = SP_ZERO_INIT;
 
     {
-        SpPipe out = SP_ZERO_INIT;
+        Sp_Pipe out = SP_ZERO_INIT;
         sp_cmd_redirect_stdout_pipe(&cmd, &out);
         build_self_child(&cmd, self, "stdout", "ONE");
 
-        SpProc p = sp_cmd_exec_async(&cmd);
+        Sp_Proc p = sp_cmd_exec_async(&cmd);
 
         char buf[2048] = SP_ZERO_INIT;
         MT_ASSERT_THAT(pipe_read_all(&out, buf, sizeof(buf)));
@@ -652,11 +652,11 @@ MT_DEFINE_TEST(cmd_reset_clears_pipe_config)
     sp_cmd_reset(&cmd);
 
     {
-        SpPipe err = SP_ZERO_INIT;
+        Sp_Pipe err = SP_ZERO_INIT;
         sp_cmd_redirect_stderr_pipe(&cmd, &err);
         build_self_child(&cmd, self, "stderr", "TWO");
 
-        SpProc p = sp_cmd_exec_async(&cmd);
+        Sp_Proc p = sp_cmd_exec_async(&cmd);
 
         char buf[2048] = SP_ZERO_INIT;
         MT_ASSERT_THAT(pipe_read_all(&err, buf, sizeof(buf)));
@@ -675,7 +675,7 @@ MT_DEFINE_TEST(cmd_reset_clears_pipe_config)
 
 MT_DEFINE_TEST(cmd_multiple_args_in_one)
 {
-    SpCmd cmd = SP_ZERO_INIT;
+    Sp_Cmd cmd = SP_ZERO_INIT;
 
     sp_cmd_add_args(&cmd, "foo", "bar", "baz");
     MT_ASSERT_THAT(cmd.args.size == 3);
@@ -699,7 +699,7 @@ MT_DEFINE_TEST(proc_detach_allows_child_to_finish)
     const char *path = "sp_test_out" SP_PATH_SEP "detach.txt";
     file_remove(path);
 
-    SpCmd cmd = SP_ZERO_INIT;
+    Sp_Cmd cmd = SP_ZERO_INIT;
 
     sp_cmd_redirect_stdin_null(&cmd);
     sp_cmd_redirect_stdout_null(&cmd);
@@ -712,7 +712,7 @@ MT_DEFINE_TEST(proc_detach_allows_child_to_finish)
     sp_cmd_add_arg(&cmd, "DETACH_OK\n");
     sp_cmd_add_arg(&cmd, "100");
 
-    SpProc p = sp_cmd_exec_async(&cmd);
+    Sp_Proc p = sp_cmd_exec_async(&cmd);
 
     sp_proc_detach(&p);
     sp_proc_detach(&p);
