@@ -21,11 +21,11 @@
  *                                                 Default: Nothing
  *  - SP_ASSERT(cond) ............................ Assertion function for `sp.h` to use.
  *                                                 Default: libc assert.
- *  - SP_LOG_INFO(fmt, ...) ...................... Used to print commands as they are run.
- *                                                 Uses printf-style formatting.
+ *  - SP_LOG_INFO(msg) ........................... Used to print commands as they are run.
+ *                                                 msg is NUL-terminated cstr.
  *                                                 Default: Nothing.
- *  - SP_LOG_ERROR(fmt, ...) ..................... Used to print error messages as they occur.
- *                                                 Uses printf-style formatting.
+ *  - SP_LOG_ERROR(msg) .......................... Used to print error messages as they occur.
+ *                                                 msg is NUL-terminated cstr.
  *                                                 Default: Nothing.
  *  - SP_REALLOC(ptr, new_size) && SP_FREE(ptr) .. Define custom allocators for `sp.h`.
  *                                                 Must match the semantics of libc realloc and free.
@@ -73,14 +73,6 @@
 #endif
 #ifndef SP_FREE
 #  define SP_FREE(ptr) free((ptr))
-#endif
-
-#ifndef SP_LOG_INFO
-#  define SP_LOG_INFO(fmt, ...) ((void)(0))
-#endif
-
-#ifndef SP_LOG_ERROR
-#  define SP_LOG_ERROR(fmt, ...) ((void)(0))
 #endif
 
 #ifdef __cplusplus
@@ -188,16 +180,16 @@ typedef struct {
 } SpProcs;
 
 
-// Adds arg to cmd.
+// Add a single arg to cmd.
 SPDEF void sp_cmd_add_arg(SpCmd *cmd, const char *arg) SP_NOEXCEPT;
 
 // Add multiple args to cmd at once, passed as separate c-strings.
 // It is intended the user calls the wrapper macro `sp_cmd_add_args`,
-// not the `sp_internal_cmd_add_args` directly.
+// not the `sp_cmd_add_args_impl_` directly.
 //  Example:
 //    sp_cmd_add_args(cmd_ptr, "foo", "bar", "baz");
-#define    sp_cmd_add_args(cmd_ptr, ...) sp_internal_cmd_add_args((cmd_ptr), __VA_ARGS__, (const char *)NULL)
-SPDEF void sp_internal_cmd_add_args(SpCmd *cmd, const char *new_arg1, ...) SP_NOEXCEPT;
+#define    sp_cmd_add_args(cmd_ptr, ...) sp_cmd_add_args_impl_((cmd_ptr), __VA_ARGS__, (const char *)NULL)
+SPDEF void sp_cmd_add_args_impl_(SpCmd *cmd, const char *new_arg1, ...) SP_NOEXCEPT;
 
 // Add multiple args at once, from an existing array of c-strings.
 //  Example:
@@ -434,30 +426,82 @@ sp_internal_string_free(SpString *str)
     sp_darray_free(str);
 }
 
+#include <stdarg.h>
+#include <stdio.h>
+
 static inline SpString
-sp_internal_sprint(const char *fmt, ...)
+sp_internal_vsprint(const char *fmt, va_list ap)
 {
-    va_list args;
-    va_start(args, fmt);
-    int need = vsnprintf(NULL, 0, fmt, args);
-    va_end(args);
+    SpString result = SP_ZERO_INIT;
+
+    va_list ap_copy;
+    va_copy(ap_copy, ap);
+    int need = vsnprintf(NULL, 0, fmt, ap_copy);
+    va_end(ap_copy);
+
     if (need < 0) {
-        SpString result = SP_ZERO_INIT;
         return result;
     }
 
-    char *buffer = (char *)SP_REALLOC(NULL, (size_t)need+1);
+    char *buffer = (char *)SP_REALLOC(NULL, (size_t)need + 1);
+    if (!buffer) {
+        return result;
+    }
 
-    va_start(args, fmt);
-    vsnprintf(buffer, (size_t)need + 1, fmt, args);
+    int written = vsnprintf(buffer, (size_t)need + 1, fmt, ap);
+    if (written < 0) {
+        SP_FREE(buffer);
+        return result;
+    }
+
     buffer[(size_t)need] = '\0';
-    va_end(args);
-
-    SpString result = SP_ZERO_INIT;
     sp_internal_string_append_cstr(&result, buffer);
 
+    SP_FREE(buffer);
     return result;
 }
+
+static inline SpString
+sp_internal_sprint(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    SpString s = sp_internal_vsprint(fmt, ap);
+    va_end(ap);
+    return s;
+}
+
+
+static inline void
+sp_internal_log_info(const char *fmt, ...)
+{
+    (void)fmt;
+#ifdef SP_LOG_INFO
+    va_list ap;
+    va_start(ap, fmt);
+    SpString s = sp_internal_vsprint(fmt, ap);
+    va_end(ap);
+    sp_internal_string_ensure_null(&s);
+    SP_LOG_INFO(s.buffer);
+    sp_internal_string_free(&s);
+#endif
+}
+
+static inline void
+sp_internal_log_error(const char *fmt, ...)
+{
+    (void)fmt;
+#ifdef SP_LOG_ERROR
+    va_list ap;
+    va_start(ap, fmt);
+    SpString s = sp_internal_vsprint(fmt, ap);
+    va_end(ap);
+    sp_internal_string_ensure_null(&s);
+    SP_LOG_ERROR(s.buffer);
+    sp_internal_string_free(&s);
+#endif
+}
+
 
 static inline void
 sp_internal_proc_handle_store_by_bytes(SpProc     *proc,
@@ -571,7 +615,7 @@ sp_cmd_add_arg(SpCmd      *cmd,
 }
 
 SPDEF void
-sp_internal_cmd_add_args(SpCmd      *cmd,
+sp_cmd_add_args_impl_(SpCmd      *cmd,
                          const char *new_arg1,
                                      ...) SP_NOEXCEPT
 {
@@ -813,10 +857,9 @@ sp_internal_win32_strerror(DWORD err)
 static inline void
 sp_internal_win32_log_last_error(const char *context)
 {
-    (void)context; // Unused if error logging is disabled
     DWORD err = GetLastError();
     SpString msg = sp_internal_win32_strerror(err);
-    SP_LOG_ERROR("%s: %s", context, msg.buffer);
+    sp_internal_log_error("%s: %s", context, msg.buffer);
     sp_internal_string_free(&msg);
 }
 
@@ -1063,7 +1106,7 @@ sp_pipe_read(SpPipe *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
-        SP_LOG_ERROR("%s", "sp_pipe_read: invalid pipe or wrong mode");
+        sp_internal_log_error("sp_pipe_read: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -1081,7 +1124,7 @@ sp_pipe_read(SpPipe *p,
             return 1;
         }
         SpString msg = sp_internal_win32_strerror(err);
-        SP_LOG_ERROR("sp_pipe_read failed: %s", msg.buffer);
+        sp_internal_log_error("sp_pipe_read failed: %s", msg.buffer);
         sp_internal_string_free(&msg);
         return 0;
     }
@@ -1100,7 +1143,7 @@ sp_pipe_write(SpPipe     *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
-        SP_LOG_ERROR("%s", "sp_pipe_write: invalid pipe or wrong mode");
+        sp_internal_log_error("sp_pipe_write: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -1238,7 +1281,7 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
     cmd_quoted = sp_internal_win32_quote_cmd(cmd);
     SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows requires command line (incl NUL) < 32767 chars");
 
-    SP_LOG_INFO(SP_INTERNAL_STRING_FMT_STR(cmd_quoted), SP_INTERNAL_STRING_FMT_ARG(cmd_quoted));
+    sp_internal_log_info(SP_INTERNAL_STRING_FMT_STR(cmd_quoted), SP_INTERNAL_STRING_FMT_ARG(cmd_quoted));
 
     success = CreateProcessA(NULL,
                              cmd_quoted.buffer,
@@ -1303,13 +1346,13 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
     SP_ASSERT(proc);
 
     if (!sp_internal_proc_is_valid(proc)) {
-        SP_LOG_ERROR("%s", "sp_proc_wait called on invalid process handle");
+        sp_internal_log_error("sp_proc_wait called on invalid process handle");
         return -1;
     }
 
     HANDLE h = sp_internal_win32_proc_get_handle(proc);
     if (h == NULL) {
-        SP_LOG_ERROR("sp_proc_wait got NULL HANDLE");
+        sp_internal_log_error("sp_proc_wait got NULL HANDLE");
         memset(proc, 0, sizeof(*proc));
         return -1;
     }
@@ -1323,7 +1366,7 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
     }
     if (w != WAIT_OBJECT_0) {
         // Unexpected, but not a GetLastError()-style failure
-        SP_LOG_ERROR("WaitForSingleObject returned unexpected status: 0x%lX", (unsigned long)w);
+        sp_internal_log_error("WaitForSingleObject returned unexpected status: 0x%lX", (unsigned long)w);
         CloseHandle(h);
         memset(proc, 0, sizeof(*proc));
         return -1;
@@ -1391,7 +1434,7 @@ static inline void
 sp_internal_posix_log_errno(const char *context)
 {
     (void)context; // Unused if error logging is disabled
-    SP_LOG_ERROR("%s: errno=%d", context, errno);
+    sp_internal_log_info("%s: errno=%d", context, errno);
 }
 
 static inline int
@@ -1560,7 +1603,7 @@ sp_pipe_read(SpPipe *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
-        SP_LOG_ERROR("%s", "sp_pipe_read: invalid pipe or wrong mode");
+        sp_internal_log_info("%s", "sp_pipe_read: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -1592,7 +1635,7 @@ sp_pipe_write(SpPipe     *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
-        SP_LOG_ERROR("%s", "sp_pipe_write: invalid pipe or wrong mode");
+        sp_internal_log_info("%s", "sp_pipe_write: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -1703,13 +1746,13 @@ sp_cmd_exec_async(SpCmd *cmd) SP_NOEXCEPT
         goto fail;
     }
     if (!argv[0] || argv[0][0] == '\0') {
-        SP_LOG_ERROR("%s", "sp: empty argv[0]");
+        sp_internal_log_info("%s", "sp: empty argv[0]");
         SP_FREE(argv);
         goto fail;
     }
 
     quoted = sp_internal_posix_quote_cmd(cmd);
-    SP_LOG_INFO(SP_INTERNAL_STRING_FMT_STR(quoted), SP_INTERNAL_STRING_FMT_ARG(quoted));
+    sp_internal_log_info(SP_INTERNAL_STRING_FMT_STR(quoted), SP_INTERNAL_STRING_FMT_ARG(quoted));
     sp_internal_string_free(&quoted);
 
     pid = fork();
@@ -1809,13 +1852,13 @@ sp_proc_wait(SpProc *proc) SP_NOEXCEPT
     SP_ASSERT(proc);
 
     if (!sp_internal_proc_is_valid(proc)) {
-        SP_LOG_ERROR("%s", "sp_proc_wait called on invalid process handle");
+        sp_internal_log_info("%s", "sp_proc_wait called on invalid process handle");
         return -1;
     }
 
     pid_t pid = sp_internal_posix_proc_get_handle(proc);
     if (pid <= 0) {
-        SP_LOG_ERROR("%s", "sp_proc_wait got invalid pid");
+        sp_internal_log_info("%s", "sp_proc_wait got invalid pid");
         memset(proc, 0, sizeof(*proc));
         return -1;
     }
