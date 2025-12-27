@@ -57,16 +57,14 @@ int main(void)
 By default, `sp.h` performs **no logging and produces no stdout/stderr output** of its own.
 All informational and error messages are disabled unless explicitly enabled by the user.
 
-Logging can be enabled by defining the following macros **before** including `sp.h`:
+Logging can be enabled by defining the following macros **before** including `sp.h`, in the **same** translation unit as you define `SP_IMPLEMENTATION`:
 
 ```c
-#define SP_LOG_INFO(fmt, ...)  // your logging function
-#define SP_LOG_ERROR(fmt, ...) // your logging function
+#define SP_LOG_INFO(msg)  printf("%s\n", (msg)) // Or your logging function of choice
+#define SP_LOG_ERROR(msg) fprintf(stderr, "Error: %s\n", (msg)) // Or your logging function of choice
 ```
-These macros use printf-style formatting and are invoked by `sp.h` when commands
-are executed or when errors occur.
-
-If not defined, both macros expand to no-ops.
+These macros are invoked by `sp.h` when commands are executed or when errors occur.
+`msg` is a NUL-terminated C-string.
 
 ---
 
