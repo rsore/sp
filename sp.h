@@ -462,10 +462,10 @@ sp_internal_vsprint(const char *fmt, va_list ap)
 {
     Sp_String result = SP_ZERO_INIT;
 
-    va_list ap_copy;
-    va_copy(ap_copy, ap);
-    int need = vsnprintf(NULL, 0, fmt, ap_copy);
-    va_end(ap_copy);
+    va_list ap1;
+    va_copy(ap1, ap);
+    int need = vsnprintf(NULL, 0, fmt, ap1);
+    va_end(ap1);
 
     if (need < 0) {
         return result;
@@ -476,16 +476,25 @@ sp_internal_vsprint(const char *fmt, va_list ap)
         return result;
     }
 
-    int written = vsnprintf(buffer, (size_t)need + 1, fmt, ap);
+    va_list ap2;
+    va_copy(ap2, ap);
+    int written = vsnprintf(buffer, (size_t)need + 1, fmt, ap2);
+    va_end(ap2);
+
     if (written < 0) {
         SP_FREE(buffer);
         return result;
     }
 
-    buffer[(size_t)need] = '\0';
+    if (written > need) {
+        SP_FREE(buffer);
+        return result;
+    }
+
+    buffer[(size_t)written] = '\0';
 
     result.buffer   = buffer;
-    result.size     = (size_t)need;
+    result.size     = (size_t)written;
     result.capacity = (size_t)need + 1;
 
     return result;
@@ -511,7 +520,6 @@ sp_internal_log_info(const char *fmt, ...)
     va_start(ap, fmt);
     Sp_String s = sp_internal_vsprint(fmt, ap);
     va_end(ap);
-    sp_internal_string_ensure_null(&s);
     SP_LOG_INFO(s.buffer);
     sp_internal_string_free(&s);
 #endif
@@ -526,7 +534,6 @@ sp_internal_log_error(const char *fmt, ...)
     va_start(ap, fmt);
     Sp_String s = sp_internal_vsprint(fmt, ap);
     va_end(ap);
-    sp_internal_string_ensure_null(&s);
     SP_LOG_ERROR(s.buffer);
     sp_internal_string_free(&s);
 #endif
