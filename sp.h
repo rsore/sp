@@ -341,13 +341,6 @@ SPDEF const char *sp_license_text(void) SP_NOEXCEPT;
         (arr)->buffer[(arr)->size++] = (new_element);                                                                            \
     } while (0)
 
-#define cap_darray_copy(src, dest)                                                                                               \
-    do {                                                                                                                         \
-        cap_darray_grow_to_fit((dest), (src)->size);                                                                             \
-        memcpy((dest)->buffer, (src)->buffer, (src)->size * sizeof(*(src)->buffer));                                             \
-        (dest)->size = (src)->size;                                                                                              \
-    } while (0)
-
 #define sp_darray_free(arr)                                                                                                      \
     do {                                                                                                                         \
         if ((arr)->buffer) SP_FREE((arr)->buffer);                                                                               \

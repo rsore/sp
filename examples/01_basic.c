@@ -16,7 +16,8 @@ child_main(void)
 }
 
 int
-main(int argc, char **argv)
+main(int    argc,
+     char **argv)
 {
     // Disable stdout and stderr buffering
     setvbuf(stdout, NULL, _IONBF, 0);
