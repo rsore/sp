@@ -255,6 +255,13 @@ SPDEF void sp_batch_reset(Sp_CmdBatch *batch) SP_NOEXCEPT;
 // Resets and frees batch object and its owned memory.
 SPDEF void sp_batch_free(Sp_CmdBatch *batch) SP_NOEXCEPT;
 
+
+// Returns the BSD-3-Clause license text of sp.h as a NUL-terminated C string.
+// The returned string has static storage duration and must not be freed.
+// Returns NULL if the license text was not embedded
+// (i.e. SP_EMBED_LICENSE was not defined in the SP_IMPLEMENTATION translation unit).
+SPDEF const char *sp_license_text(void) SP_NOEXCEPT;
+
 #ifdef __cplusplus
 }
 #endif
@@ -1661,7 +1668,7 @@ static inline void
 sp_internal_posix_log_errno(const char *context)
 {
     (void)context; // Unused if error logging is disabled
-    sp_internal_log_info("%s: errno=%d", context, errno);
+    sp_internal_log_error("%s: errno=%d", context, errno);
 }
 
 static inline int
@@ -1898,7 +1905,7 @@ sp_pipe_read(Sp_Pipe *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
-        sp_internal_log_info("%s", "sp_pipe_read: invalid pipe or wrong mode");
+        sp_internal_log_error("sp_pipe_read: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -1930,7 +1937,7 @@ sp_pipe_write(Sp_Pipe     *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
-        sp_internal_log_info("%s", "sp_pipe_write: invalid pipe or wrong mode");
+        sp_internal_log_error("sp_pipe_write: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -2041,7 +2048,7 @@ sp_cmd_exec_async(Sp_Cmd *cmd) SP_NOEXCEPT
         goto fail;
     }
     if (!argv[0] || argv[0][0] == '\0') {
-        sp_internal_log_info("%s", "sp: empty argv[0]");
+        sp_internal_log_error("sp: empty argv[0]");
         SP_FREE(argv);
         goto fail;
     }
@@ -2306,8 +2313,6 @@ extern "C" {
 
 SP_INTERNAL_DEF SP_INTERNAL_ALLOCATE_LICENSE
 const char sp_embedded_license[] =
-    "sp.h\n"
-    "\n"
     "BSD-3-CLAUSE LICENSE\n"
     "\n"
     "Copyright 2025 rsore\n"
@@ -2330,6 +2335,16 @@ const char *sp_embedded_license_ptr = sp_embedded_license;
 #  endif
 
 #endif // SP_EMBED_LICENSE
+
+SPDEF const char *
+sp_license_text(void) SP_NOEXCEPT
+{
+#ifdef SP_EMBED_LICENSE
+    return sp_embedded_license;
+#else
+    return NULL;
+#endif
+}
 
 #endif // SP_IMPLEMENTATION
 
