@@ -29,7 +29,6 @@ main(int    argc,
         return child_main(id);
     }
 
-
     Sp_CmdBatch batch = {0};
     Sp_Cmd cmd = {0};
 

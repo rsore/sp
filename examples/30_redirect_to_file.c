@@ -19,7 +19,8 @@ child_main(void)
 
 
 int
-main(int argc, char **argv)
+main(int    argc,
+     char **argv)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -32,8 +33,8 @@ main(int argc, char **argv)
 
     // stdout/stderr -> separate files
     sp_cmd_add_args(&cmd, argv[0], "--child");
-    sp_cmd_redirect_stdout_to_file(&cmd, "redirect_to_file_out.txt", SP_FILE_WRITE_TRUNC);
-    sp_cmd_redirect_stderr_to_file(&cmd, "redirect_to_file_err.txt", SP_FILE_WRITE_APPEND);
+    sp_cmd_redirect_stdout_to_file(&cmd, "redirect_to_file_out.txt", SP_FILE_WRITE_TRUNC);  // TRUNC will overwrite existing file
+    sp_cmd_redirect_stderr_to_file(&cmd, "redirect_to_file_err.txt", SP_FILE_WRITE_APPEND); // APPEND will append to existing file
     int code1 = sp_cmd_exec_sync(&cmd);
 
     // stdout/stderr -> merged file (2>&1)

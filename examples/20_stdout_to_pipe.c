@@ -17,7 +17,8 @@ child_main(void)
 }
 
 int
-main(int argc, char **argv)
+main(int    argc,
+     char **argv)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -30,6 +31,8 @@ main(int argc, char **argv)
     Sp_Pipe out = {0};
 
     sp_cmd_add_args(&cmd, argv[0], "--child");
+
+    // To capture stderr instead, use sp_cmd_redirect_stderr_pipe(&cmd, &out).
     sp_cmd_redirect_stdout_pipe(&cmd, &out);
 
     // Run the child. After a successful exec, `out` is a valid read pipe.

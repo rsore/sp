@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
+// Note: sp.h logs the executed command via SP_LOG_INFO.
+
 int
 child_main(void)
 {

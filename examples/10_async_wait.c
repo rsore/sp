@@ -15,7 +15,8 @@ child_main(const char *id)
 }
 
 int
-main(int argc, char **argv)
+main(int    argc,
+     char **argv)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
