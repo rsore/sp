@@ -51,7 +51,6 @@
  * at the end of this file.
  */
 
-
 #ifndef SP_H_INCLUDED_
 #define SP_H_INCLUDED_
 

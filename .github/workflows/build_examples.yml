@@ -1,0 +1,40 @@
+name: build_examples
+
+on:
+  push:
+    paths:
+      - sp.h
+      - examples/**
+  pull_request:
+    paths:
+      - sp.h
+      - examples/**
+
+jobs:
+  build-examples-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build examples (Linux)
+        run: |
+          chmod +x examples/build_all_examples.sh
+          examples/build_all_examples.sh
+
+  build-examples-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build examples (macOS)
+        run: |
+          chmod +x examples/build_all_examples.sh
+          examples/build_all_examples.sh
+
+  build-examples-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build examples (Windows / MSVC)
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          call examples\build_all_examples.bat
