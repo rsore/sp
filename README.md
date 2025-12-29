@@ -1,6 +1,7 @@
 # sp.h
 
 [![CI](https://github.com/rsore/sp/actions/workflows/test.yml/badge.svg)](https://github.com/rsore/sp/actions/workflows/test.yml)
+[![CI](https://github.com/rsore/sp/actions/workflows/build_examples.yml/badge.svg)](https://github.com/rsore/sp/actions/workflows/build_examples.yml)
 
 `sp.h` is a single-header C and C++ library implementing a thin,
 cross-platform API for subprocess management, with no external dependencies,
