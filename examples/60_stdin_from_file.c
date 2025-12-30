@@ -1,11 +1,10 @@
-#define SP_LOG_ERROR(msg) fprintf(stderr, "Error: %s\n", (msg))
-#define SP_LOG_INFO(msg)  puts((msg))
-#define SP_IMPLEMENTATION
-#define SPDEF static inline
-#include "../sp.h"
-
 #include <stdio.h>
 #include <string.h>
+
+#define USE_SIMPLE_LOGGER
+#define SPDEF static inline
+#define SP_IMPLEMENTATION
+#include "../sp.h"
 
 static int
 child_main(void)
@@ -40,7 +39,7 @@ main(int    argc,
     // Create an input file for the child.
     FILE *f = fopen(path, "wb");
     if (!f) {
-        SP_LOG_ERROR("fopen failed");
+        fputs("fopen failed\n", stderr);
         return 1;
     }
     fputs("first line\n", f);

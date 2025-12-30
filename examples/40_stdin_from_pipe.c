@@ -1,11 +1,10 @@
-#define SP_LOG_ERROR(msg) fprintf(stderr, "Error: %s\n", (msg))
-#define SP_LOG_INFO(msg)  puts((msg))
+#include <stdio.h>
+#include <string.h>
+
+#define USE_SIMPLE_LOGGER
 #define SP_IMPLEMENTATION
 #define SPDEF static inline
 #include "../sp.h"
-
-#include <stdio.h>
-#include <string.h>
 
 static int
 child_main(void)

@@ -14,26 +14,36 @@
  * Certain behavior of `sp.h` can be customized by defining some
  * preprocessor definitions before including the `sp.h`:
  *  - SP_IMPLEMENTATION .......................... Include all function definitions.
- *  - SP_EMBED_LICENSE ........................... Embeds BSD-3-Clause license text
- *                                                 in the program binary.
+ *                                                 All the following optional definitions
+ *                                                 must be put in the same translation unit
+ *                                                 as this.
+ *
  *  - SPDEF ...................................... Prefixed to all functions.
  *                                                 Example: `#define SPDEF static inline`
- *                                                 Default: Nothing
+ *                                                 Default: Nothing.
+ *
+ *  - SP_EMBED_LICENSE ........................... Embeds BSD-3-Clause license text
+ *                                                 in the program binary.
+ *
  *  - SP_ASSERT(cond) ............................ Assertion function for `sp.h` to use.
  *                                                 Default: libc assert.
- *  - SP_LOG_INFO(msg) ........................... Used to print commands as they are run.
- *                                                 msg is NUL-terminated cstr.
- *                                                 msg is only valid during the callback/macro expansion.
- *                                                 copy if you need to keep it.
- *                                                 Default: Nothing.
- *  - SP_LOG_ERROR(msg) .......................... Used to print error messages as they occur.
- *                                                 msg is NUL-terminated cstr.
- *                                                 msg is only valid during the callback/macro expansion.
- *                                                 copy if you need to keep it.
- *                                                 Default: Nothing.
+ *
  *  - SP_REALLOC(ptr, new_size) && SP_FREE(ptr) .. Define custom allocators for `sp.h`.
  *                                                 Must match the semantics of libc realloc and free.
  *                                                 Default: `libc realloc` and `libc free`.
+ *
+ *  - SP_LOG(level, msg) ......................... If defined, used to log info, errors and echo commands
+ *                                                 when run. level is `SP_LOG_LEVEL_*` and msg is NUL-terminated
+ *                                                 cstr. msg is invalid after log call, if you want to keep
+ *                                                 it, copy it.
+ *                                                 Example: `#define SP_LOG(level, msg) \
+ *                                                               fprintf(stderr, "%s: %s\n", sp_log_level_to_str((level)), (msg))`
+ *                                                 Default: nothing.
+ *
+ *  - SP_USE_SIMPLE_LOGGER ....................... If defined, sets `SP_LOG(level, msg)` to a very simple
+ *                                                 logger that just puts any log messages directly to
+ *                                                 stderr.
+ *
  *
  * ~~ NOTES ~~
  * - When a subprocess inherits the console, its output may appear before
@@ -96,6 +106,19 @@
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#define SP_LOG_LEVEL_ECHO_CMD 0x00 // Commands as strings as they are executed
+#define SP_LOG_LEVEL_INFO     0x01
+#define SP_LOG_LEVEL_WARNING  0x02
+#define SP_LOG_LEVEL_ERROR    0x03
+
+#if defined(SP_USE_SIMPLE_LOGGER) && !defined(SP_LOG)
+#define SP_LOG(level, msg)    \
+    do {                      \
+        fputs((msg), stderr); \
+        fputc('\n',  stderr); \
+    } while (0)
 #endif
 
 typedef struct {
@@ -510,30 +533,34 @@ sp_internal_sprint(const char *fmt, ...)
 }
 
 
-static inline void
-sp_internal_log_info(const char *fmt, ...)
+static inline const char *
+sp_log_level_to_str(int level)
 {
-    (void)fmt;
-#ifdef SP_LOG_INFO
-    va_list ap;
-    va_start(ap, fmt);
-    Sp_String s = sp_internal_vsprint(fmt, ap);
-    va_end(ap);
-    SP_LOG_INFO(s.buffer);
-    sp_internal_string_free(&s);
-#endif
+    switch (level)
+    {
+    case SP_LOG_LEVEL_ECHO_CMD: return "CMD";
+    case SP_LOG_LEVEL_INFO:     return "INFO";
+    case SP_LOG_LEVEL_WARNING:  return "INFO";
+    case SP_LOG_LEVEL_ERROR:    return "INFO";
+    }
+    return "UNKNOWN_LOG_LEVEL";
 }
 
 static inline void
-sp_internal_log_error(const char *fmt, ...)
+sp_internal_log(int          level,
+                const char  *fmt,
+                ...)
 {
+    // Maybe unused
     (void)fmt;
-#ifdef SP_LOG_ERROR
+    (void)level;
+
+#ifdef SP_LOG
     va_list ap;
     va_start(ap, fmt);
     Sp_String s = sp_internal_vsprint(fmt, ap);
     va_end(ap);
-    SP_LOG_ERROR(s.buffer);
+    SP_LOG(level, s.buffer);
     sp_internal_string_free(&s);
 #endif
 }
@@ -997,7 +1024,7 @@ sp_internal_win32_log_last_error(const char *context)
 {
     DWORD err = GetLastError();
     Sp_String msg = sp_internal_win32_strerror(err);
-    sp_internal_log_error("%s: %s", context, msg.buffer);
+    sp_internal_log(SP_LOG_LEVEL_ERROR, "%s: %s", context, msg.buffer);
     sp_internal_string_free(&msg);
 }
 
@@ -1241,7 +1268,7 @@ sp_internal_win32_proc_is_done(Sp_Proc  *proc,
         if (w == WAIT_FAILED) {
             sp_internal_win32_log_last_error("WaitForSingleObject failed");
         } else {
-            sp_internal_log_error("WaitForSingleObject returned unexpected status: 0x%lX", (unsigned long)w);
+            sp_internal_log(SP_LOG_LEVEL_ERROR, "WaitForSingleObject returned unexpected status: 0x%lX", (unsigned long)w);
         }
         *out_exit_code = -1;
         return 1;
@@ -1283,7 +1310,7 @@ sp_internal_procs_wait_any(Sp_Procs  *running,
 
         DWORD idx = w - WAIT_OBJECT_0;
         if (idx >= (DWORD)running->size) {
-            sp_internal_log_error("WaitForMultipleObjects returned unexpected status: 0x%lX", (unsigned long)w);
+            sp_internal_log(SP_LOG_LEVEL_ERROR, "WaitForMultipleObjects returned unexpected status: 0x%lX", (unsigned long)w);
             return 0;
         }
 
@@ -1326,7 +1353,7 @@ sp_pipe_read(Sp_Pipe *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
-        sp_internal_log_error("sp_pipe_read: invalid pipe or wrong mode");
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "sp_pipe_read: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -1344,7 +1371,7 @@ sp_pipe_read(Sp_Pipe *p,
             return 1;
         }
         Sp_String msg = sp_internal_win32_strerror(err);
-        sp_internal_log_error("sp_pipe_read failed: %s", msg.buffer);
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "sp_pipe_read failed: %s", msg.buffer);
         sp_internal_string_free(&msg);
         return 0;
     }
@@ -1363,7 +1390,7 @@ sp_pipe_write(Sp_Pipe     *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
-        sp_internal_log_error("sp_pipe_write: invalid pipe or wrong mode");
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "sp_pipe_write: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -1501,7 +1528,7 @@ sp_cmd_exec_async(Sp_Cmd *cmd) SP_NOEXCEPT
     cmd_quoted = sp_internal_win32_quote_cmd(cmd);
     SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows requires command line (incl NUL) < 32767 chars");
 
-    sp_internal_log_info(SP_INTERNAL_STRING_FMT_STR(cmd_quoted), SP_INTERNAL_STRING_FMT_ARG(cmd_quoted));
+    sp_internal_log(SP_LOG_LEVEL_ECHO_CMD, SP_INTERNAL_STRING_FMT_STR(cmd_quoted), SP_INTERNAL_STRING_FMT_ARG(cmd_quoted));
 
     success = CreateProcessA(NULL,
                              cmd_quoted.buffer,
@@ -1592,7 +1619,7 @@ sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT
         return -1;
     }
     if (w != WAIT_OBJECT_0) {
-        sp_internal_log_error("WaitForSingleObject returned unexpected status: 0x%lX", (unsigned long)w);
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "WaitForSingleObject returned unexpected status: 0x%lX", (unsigned long)w);
         CloseHandle(h);
         memset(proc, 0, sizeof(*proc));
         return -1;
@@ -1660,7 +1687,7 @@ static inline void
 sp_internal_posix_log_errno(const char *context)
 {
     (void)context; // Unused if error logging is disabled
-    sp_internal_log_error("%s: errno=%d", context, errno);
+    sp_internal_log(SP_LOG_LEVEL_ERROR, "%s: errno=%d", context, errno);
 }
 
 static inline int
@@ -1897,7 +1924,7 @@ sp_pipe_read(Sp_Pipe *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_READ) {
-        sp_internal_log_error("sp_pipe_read: invalid pipe or wrong mode");
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "sp_pipe_read: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -1929,7 +1956,7 @@ sp_pipe_write(Sp_Pipe     *p,
     *out_n = 0;
 
     if (!sp_internal_pipe_is_valid(p) || p->mode != SP_PIPE_WRITE) {
-        sp_internal_log_error("sp_pipe_write: invalid pipe or wrong mode");
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "sp_pipe_write: invalid pipe or wrong mode");
         return 0;
     }
 
@@ -2040,13 +2067,13 @@ sp_cmd_exec_async(Sp_Cmd *cmd) SP_NOEXCEPT
         goto fail;
     }
     if (!argv[0] || argv[0][0] == '\0') {
-        sp_internal_log_error("sp: empty argv[0]");
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "sp: empty argv[0]");
         SP_FREE(argv);
         goto fail;
     }
 
     quoted = sp_internal_posix_quote_cmd(cmd);
-    sp_internal_log_info(SP_INTERNAL_STRING_FMT_STR(quoted), SP_INTERNAL_STRING_FMT_ARG(quoted));
+    sp_internal_log(SP_LOG_LEVEL_ECHO_CMD, SP_INTERNAL_STRING_FMT_STR(quoted), SP_INTERNAL_STRING_FMT_ARG(quoted));
     sp_internal_string_free(&quoted);
 
     pid = fork();
