@@ -267,7 +267,7 @@ SPDEF void sp_proc_detach(Sp_Proc *proc) SP_NOEXCEPT;
 SPDEF int sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT;
 
 // Add finished cmd object to batch. cmd is copied into batch, and can safely be reset/freed.
-SPDEF void sp_batch_add_cmd(Sp_CmdBatch *batch, const Sp_Cmd *cmd) SP_NOEXCEPT;
+SPDEF int sp_batch_add_cmd(Sp_CmdBatch *batch, const Sp_Cmd *cmd) SP_NOEXCEPT;
 // Run all processes in batch concurrently, with no more than max_parallel processes
 // running at any one time. Aborts early if any process fails. Returns exit code
 // of first failed process, or 0 if all succeeded.
@@ -328,6 +328,9 @@ SPDEF const char *sp_license_text(void) SP_NOEXCEPT;
 #else
 #  define SP_ZERO_INIT {0}
 #endif
+
+
+static inline void sp_internal_log(int level, const char *fmt, ...);
 
 /**
  * Dynamic array implementation
@@ -397,10 +400,14 @@ sp_internal_string_make(const char *c_str)
     Sp_String str = SP_ZERO_INIT;
     size_t len = strlen(c_str);
 
-    str.buffer = sp_internal_strdup(c_str);
-    SP_ASSERT(str.buffer);
+    char *str_buf = sp_internal_strdup(c_str);
+    if (!str_buf) {
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "Failed to allocate memory for string");
+        return str;
+    }
 
-    str.size = len;
+    str.buffer   = str_buf;
+    str.size     = len;
     str.capacity = len;
 
     sp_internal_string_ensure_null(&str);
@@ -568,22 +575,24 @@ sp_internal_log(int          level,
 
 static inline void
 sp_internal_proc_handle_store_by_bytes(Sp_Proc     *proc,
-                                       const void *value,
-                                       size_t      value_size)
+                                       const void  *value,
+                                       size_t       value_size)
 {
     SP_ASSERT(proc && value);
     SP_ASSERT(value_size <= SP_NATIVE_MAX);
+
     memcpy(proc->handle, value, value_size);
     proc->handle_size = (unsigned char)value_size;
 }
 
 static inline void
 sp_internal_proc_handle_load_by_bytes(const Sp_Proc *proc,
-                                      void         *out,
-                                      size_t        out_size)
+                                      void          *out,
+                                      size_t         out_size)
 {
     SP_ASSERT(proc && out);
     SP_ASSERT((size_t)proc->handle_size == out_size);
+
     memcpy(out, proc->handle, out_size);
 }
 
@@ -626,7 +635,7 @@ sp_internal_pipe_is_valid(const Sp_Pipe *p)
 
 static inline void
 sp_internal_redirect_set_file(Sp_Redirect *r,
-                              const char *path,
+                              const char  *path,
                               Sp_FileMode  mode)
 {
     SP_ASSERT(r);
@@ -662,7 +671,7 @@ sp_internal_redirect_free_alloc(Sp_Redirect *r)
     memset(r, 0, sizeof(*r));
 }
 
-static inline void
+static inline int
 sp_internal_string_clone(Sp_String        *dst,
                          const Sp_String  *src)
 {
@@ -672,20 +681,25 @@ sp_internal_string_clone(Sp_String        *dst,
     memset(dst, 0, sizeof(Sp_String));
 
     if (!src->buffer || src->size == 0) {
-        return;
+        return 1;
     }
 
     dst->buffer = (char *)SP_REALLOC(NULL, src->size + 1);
-    SP_ASSERT(dst->buffer);
+    if (!dst->buffer) {
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "Failed to allocate memory for string");
+        return 0;
+    }
 
     memcpy(dst->buffer, src->buffer, src->size);
     dst->buffer[src->size] = '\0';
 
     dst->size     = src->size;
     dst->capacity = src->size + 1;
+
+    return 1;
 }
 
-static inline void
+static inline int
 sp_internal_redirect_clone(Sp_Redirect        *dst,
                            const Sp_Redirect  *src)
 {
@@ -696,15 +710,21 @@ sp_internal_redirect_clone(Sp_Redirect        *dst,
 
     dst->kind = src->kind;
 
-    SP_ASSERT(dst->kind != SP_REDIR_PIPE);
+    if (dst->kind == SP_REDIR_PIPE) {
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "Cannot clone pipe object, pipes are unique");
+        SP_ASSERT(0);
+        return 0;
+    }
 
     dst->file_mode = src->file_mode;
-    sp_internal_string_clone(&dst->file_path, &src->file_path);
+    if (!sp_internal_string_clone(&dst->file_path, &src->file_path)) return 0;
 
     dst->out_pipe = NULL;
+
+    return 1;
 }
 
-static inline void
+static inline int
 sp_internal_cmd_clone(Sp_Cmd        *dst,
                       const Sp_Cmd  *src)
 {
@@ -713,26 +733,33 @@ sp_internal_cmd_clone(Sp_Cmd        *dst,
 
     memset(dst, 0, sizeof(Sp_Cmd));
 
-    SP_ASSERT(src->stdio.stdin_redir.kind  != SP_REDIR_PIPE);
-    SP_ASSERT(src->stdio.stdout_redir.kind != SP_REDIR_PIPE);
-    SP_ASSERT(src->stdio.stderr_redir.kind != SP_REDIR_PIPE);
+    if ((src->stdio.stdin_redir.kind  == SP_REDIR_PIPE) ||
+        (src->stdio.stdout_redir.kind == SP_REDIR_PIPE) ||
+        (src->stdio.stderr_redir.kind == SP_REDIR_PIPE)) {
+        sp_internal_log(SP_LOG_LEVEL_ERROR, "Cannot clone Sp_Cmd object with pipe, pipes are unique");
+        SP_ASSERT(0);
+        return 0;
+    }
 
+    int return_val = 1;
     for (size_t i = 0; i < src->args.size; i++) {
         Sp_String s = SP_ZERO_INIT;
-        sp_internal_string_clone(&s, &src->args.buffer[i]);
+        return_val = sp_internal_string_clone(&s, &src->args.buffer[i]) && return_val;
         sp_darray_append(&dst->args, s);
     }
 
     dst->internal_strings_already_initted = dst->args.size;
 
-    sp_internal_redirect_clone(&dst->stdio.stdin_redir,  &src->stdio.stdin_redir);
-    sp_internal_redirect_clone(&dst->stdio.stdout_redir, &src->stdio.stdout_redir);
-    sp_internal_redirect_clone(&dst->stdio.stderr_redir, &src->stdio.stderr_redir);
+    return_val = sp_internal_redirect_clone(&dst->stdio.stdin_redir,  &src->stdio.stdin_redir)  && return_val;
+    return_val = sp_internal_redirect_clone(&dst->stdio.stdout_redir, &src->stdio.stdout_redir) && return_val;
+    return_val = sp_internal_redirect_clone(&dst->stdio.stderr_redir, &src->stdio.stderr_redir) && return_val;
+
+    return return_val;
 }
 
 SPDEF void
 sp_cmd_add_arg(Sp_Cmd      *cmd,
-               const char *arg) SP_NOEXCEPT
+               const char  *arg) SP_NOEXCEPT
 {
     SP_ASSERT(cmd);
 
@@ -908,17 +935,19 @@ sp_cmd_free(Sp_Cmd *cmd) SP_NOEXCEPT
     sp_internal_redirect_free_alloc(&cmd->stdio.stderr_redir);
 }
 
-SPDEF
-void sp_batch_add_cmd(Sp_CmdBatch  *batch,
-                      const Sp_Cmd *cmd) SP_NOEXCEPT
+SPDEF int
+sp_batch_add_cmd(Sp_CmdBatch  *batch,
+                 const Sp_Cmd *cmd) SP_NOEXCEPT
 {
     SP_ASSERT(batch);
     SP_ASSERT(cmd);
 
     Sp_Cmd copy = SP_ZERO_INIT;
-    sp_internal_cmd_clone(&copy, cmd);
+    if (!sp_internal_cmd_clone(&copy, cmd)) return 0;
 
     sp_darray_append(&batch->cmds, copy);
+
+    return 1;
 }
 
 SPDEF void

@@ -2,7 +2,7 @@
 setlocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
 REM Fail on first error
-set CL_FLAGS=/nologo /W4 /WX /std:c11
+set CL_FLAGS=/nologo /W4 /WX /Z7 /std:c11
 
 REM Get directory of this script
 set THIS_DIR=%~dp0

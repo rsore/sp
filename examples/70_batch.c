@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define USE_SIMPLE_LOGGER
+#define SP_USE_SIMPLE_LOGGER
 #define SP_IMPLEMENTATION
 #define SPDEF static inline
 #include "../sp.h"
@@ -29,7 +29,7 @@ main(int    argc,
     }
 
     Sp_CmdBatch batch = {0};
-    Sp_Cmd cmd = {0};
+    Sp_Cmd      cmd   = {0};
 
     static const char *ids[] = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten" };
     for (size_t i = 0; i < (sizeof(ids) / sizeof(ids[0])); ++i) {

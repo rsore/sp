@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define USE_SIMPLE_LOGGER
+#define SP_USE_SIMPLE_LOGGER
 #define SP_IMPLEMENTATION
 #define SPDEF static inline
 #include "../sp.h"

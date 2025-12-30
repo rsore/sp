@@ -6,7 +6,7 @@ THIS_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 pushd "$THIS_DIR"
 
 CC="cc"
-CFLAGS="-Wall -Wextra -pedantic"
+CFLAGS="-Wall -Wextra -pedantic -ggdb"
 
 $CC $CFLAGS -o 01_sync 01_sync.c
 $CC $CFLAGS -o 10_async_wait 10_async_wait.c
