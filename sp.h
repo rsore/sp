@@ -297,12 +297,15 @@ SPDEF int sp_batch_add_cmd(Sp_Batch *batch, const Sp_Cmd *cmd) SP_NOEXCEPT;
 // both logger function and user data. Overrides any custom logger and user data
 // already set in cmd. Sets the logger for all commands already in the batch,
 // and all future commands added to the batch.
-SPDEF void sp_batch_set_logger(Sp_Batch *batch, Sp_LogFn logger, void *user_data);
+SPDEF void sp_batch_set_logger(Sp_Batch *batch, Sp_LogFn logger, void *user_data) SP_NOEXCEPT;
 
 // Sets a log mask that is propagated to all commands that are part of this batch.
 // Overrides any log mask already defined in cmd. Sets the log mask for all commands
 // already in the batch, and all future commands added to the batch.
-SPDEF void sp_batch_set_log_mask(Sp_Batch *batch, unsigned int mask);
+SPDEF void sp_batch_set_log_mask(Sp_Batch *batch, unsigned int mask) SP_NOEXCEPT;
+
+// Returns the amount of commands currently in the batch
+SPDEF size_t sp_batch_size(Sp_Batch *batch) SP_NOEXCEPT;
 
 // Run all processes in batch concurrently, with no more than max_parallel processes
 // running at any one time. Aborts early if any process fails. Returns exit code
@@ -1095,7 +1098,7 @@ sp_batch_add_cmd(Sp_Batch     *batch,
 SPDEF void
 sp_batch_set_logger(Sp_Batch *batch,
                     Sp_LogFn  logger,
-                    void     *user_data)
+                    void     *user_data) SP_NOEXCEPT
 {
     if (!batch) return;
     batch->log_fn = logger;
@@ -1109,7 +1112,7 @@ sp_batch_set_logger(Sp_Batch *batch,
 
 SPDEF void
 sp_batch_set_log_mask(Sp_Batch     *batch,
-                      unsigned int  mask)
+                      unsigned int  mask) SP_NOEXCEPT
 {
     if (!batch) return;
     batch->log_level_mask         = mask;
@@ -1119,6 +1122,13 @@ sp_batch_set_log_mask(Sp_Batch     *batch,
         Sp_Cmd *cmd = &batch->cmds.buffer[i];
         sp_cmd_set_log_mask(cmd, mask);
     }
+}
+
+SPDEF size_t
+sp_batch_size(Sp_Batch *batch) SP_NOEXCEPT
+{
+    if (!batch) return 0;
+    return batch->cmds.size;
 }
 
 
