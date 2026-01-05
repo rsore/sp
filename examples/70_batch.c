@@ -74,7 +74,7 @@ main(int    argc,
     size_t max_parallel = 3;
 
     // Output order is nondeterministic because children run concurrently.
-    int exit_code = sp_batch_exec_sync(&batch, max_parallel);
+    int exit_code = sp_batch_run(&batch, max_parallel);
     sp_batch_free(&batch);
 
     return exit_code;

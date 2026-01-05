@@ -811,7 +811,7 @@ MT_DEFINE_TEST(batch_exec_sync_fail_fast_sequential)
     build_self_child_write_file_exit(&cmd, self, p3, "SHOULD_NOT_RUN\n", 0);
     sp_batch_add_cmd(&batch, &cmd);
 
-    int code = sp_batch_exec_sync(&batch, 1);
+    int code = sp_batch_run(&batch, 1);
     MT_CHECK_THAT(code == 7);
 
     MT_CHECK_THAT(file_exists(p1));

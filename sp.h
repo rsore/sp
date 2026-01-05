@@ -33,9 +33,8 @@
  *                                                 Default: `libc realloc` and `libc free`.
  *
  *  - SP_LOG(level, msg) ......................... If defined, used to log info, errors and echo commands
- *                                                 when run. level is `SP_LOG_LEVEL_*` and msg is NUL-terminated
- *                                                 cstr. msg is invalid after log call, if you want to keep
- *                                                 it, copy it.
+ *                                                 when run. level is `SP_LOG_LEVEL_*` (bitmask) and msg is NUL-terminated
+ *                                                 cstr. msg is invalid after log call, if you want to keep it, copy it.
  *                                                 Example: `#define SP_LOG(level, msg) \
  *                                                               fprintf(stderr, "%s: %s\n", sp_log_level_to_str((level)), (msg))`
  *                                                 Default: nothing.
@@ -308,12 +307,15 @@ SPDEF void sp_batch_set_log_mask(Sp_Batch *batch, unsigned int mask);
 // Run all processes in batch concurrently, with no more than max_parallel processes
 // running at any one time. Aborts early if any process fails. Returns exit code
 // of first failed process, or 0 if all succeeded.
-SPDEF int sp_batch_exec_sync(Sp_Batch *batch, size_t max_parallel) SP_NOEXCEPT;
+SPDEF int sp_batch_run(Sp_Batch *batch, size_t max_parallel) SP_NOEXCEPT;
 // Resets batch object for reuse without deallocating internal memory
 SPDEF void sp_batch_reset(Sp_Batch *batch) SP_NOEXCEPT;
 // Resets and frees batch object and its owned memory.
 SPDEF void sp_batch_free(Sp_Batch *batch) SP_NOEXCEPT;
 
+
+// Returns a stringified version of the log level. The string must not be freed.
+SPDEF const char * sp_log_level_to_str(unsigned int level);
 
 // Returns the BSD-3-Clause license text of sp.h as a NUL-terminated C string.
 // The returned string has static storage duration and must not be freed.
@@ -572,22 +574,6 @@ sp_internal_sprint(const char *fmt, ...)
     va_end(ap);
     return s;
 }
-
-
-static inline const char *
-sp_log_level_to_str(unsigned int level)
-{
-    switch (level)
-    {
-    case SP_LOG_LEVEL_ECHO_CMD: return "CMD";
-    case SP_LOG_LEVEL_INFO:     return "INFO";
-    case SP_LOG_LEVEL_WARNING:  return "INFO";
-    case SP_LOG_LEVEL_ERROR:    return "INFO";
-    }
-    return "UNKNOWN_LOG_LEVEL";
-}
-
-
 
 
 // sp_internal_log.c (or inside your sp.h)
@@ -1157,6 +1143,20 @@ sp_batch_free(Sp_Batch *batch) SP_NOEXCEPT
     sp_darray_free(&batch->cmds);
     memset(batch, 0, sizeof(Sp_Batch));
 }
+
+SPDEF const char *
+sp_log_level_to_str(unsigned int level)
+{
+    switch (level)
+    {
+    case SP_LOG_LEVEL_ECHO_CMD: return "CMD";
+    case SP_LOG_LEVEL_INFO:     return "INFO";
+    case SP_LOG_LEVEL_WARNING:  return "INFO";
+    case SP_LOG_LEVEL_ERROR:    return "INFO";
+    }
+    return "UNKNOWN_LOG_LEVEL";
+}
+
 
 /**
  * Windows implementation follows
@@ -2102,7 +2102,7 @@ sp_internal_procs_wait_any(Sp_Procs  *running,
             if (r == 0) continue;
 
             if (r < 0) {
-                sp_internal_posix_log_errno("sp_batch_exec_sync: waitpid failed");
+                sp_internal_posix_log_errno("sp_batch_run: waitpid failed");
                 *out_index = i;
                 *out_exit_code = -1;
                 memset(&running->buffer[i], 0, sizeof(running->buffer[i]));
@@ -2429,8 +2429,8 @@ sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT
 
 
 SPDEF int
-sp_batch_exec_sync(Sp_Batch *batch,
-                   size_t    max_parallel) SP_NOEXCEPT
+sp_batch_run(Sp_Batch *batch,
+             size_t    max_parallel) SP_NOEXCEPT
 {
     if (!batch) return -1;
 
