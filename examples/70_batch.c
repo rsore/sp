@@ -6,31 +6,6 @@
 #define SPDEF static inline
 #include "../sp.h"
 
-typedef struct {
-    size_t    index;
-    Sp_Batch *batch;
-} BatchCmdLogUserData;
-
-static void
-batch_cmd_log(unsigned int  level,
-              const char   *msg,
-              void         *user_data)
-{
-    BatchCmdLogUserData *ud = (BatchCmdLogUserData *)user_data;
-
-    if (level & SP_LOG_LEVEL_ECHO_CMD) {
-        printf("[%zu/%zu] %s\n",
-               ud->index,
-               ud->batch->cmds.size,
-               msg);
-        ud->index++;
-        return;
-    }
-
-    fputs(msg, stderr);
-    fputc('\n', stderr);
-}
-
 int
 child_main(const char *id)
 {
@@ -55,9 +30,6 @@ main(int    argc,
 
     Sp_Batch batch = sp_batch_init();
     Sp_Cmd   cmd   = sp_cmd_init();
-    BatchCmdLogUserData user_data = {.index = 1, .batch = &batch};
-
-    sp_batch_set_logger(&batch, batch_cmd_log, &user_data);
 
     static const char *ids[] = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten" };
     for (size_t i = 0; i < (sizeof(ids) / sizeof(ids[0])); ++i) {

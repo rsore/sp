@@ -34,6 +34,9 @@ if errorlevel 1 goto :fail
 cl %CL_FLAGS% /Fe70_batch.exe              70_batch.c
 if errorlevel 1 goto :fail
 
+cl %CL_FLAGS% /Fe80_custom_logger.exe      80_custom_logger.c
+if errorlevel 1 goto :fail
+
 echo.
 echo All examples built successfully.
 goto :eof
