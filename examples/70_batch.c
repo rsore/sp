@@ -28,8 +28,8 @@ main(int    argc,
         return child_main(id);
     }
 
-    Sp_CmdBatch batch = {0};
-    Sp_Cmd      cmd   = {0};
+    Sp_Batch batch = {0};
+    Sp_Cmd   cmd   = {0};
 
     static const char *ids[] = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten" };
     for (size_t i = 0; i < (sizeof(ids) / sizeof(ids[0])); ++i) {

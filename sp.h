@@ -108,10 +108,10 @@
 extern "C" {
 #endif
 
-#define SP_LOG_LEVEL_ECHO_CMD 0x00 // Commands as strings as they are executed
-#define SP_LOG_LEVEL_INFO     0x01
-#define SP_LOG_LEVEL_WARNING  0x02
-#define SP_LOG_LEVEL_ERROR    0x03
+#define SP_LOG_LEVEL_ECHO_CMD 0x01 // Commands as strings as they are executed
+#define SP_LOG_LEVEL_INFO     0x02
+#define SP_LOG_LEVEL_WARNING  0x04
+#define SP_LOG_LEVEL_ERROR    0x08
 
 #if defined(SP_USE_SIMPLE_LOGGER) && !defined(SP_LOG)
 #define SP_LOG(level, msg)    \
@@ -207,7 +207,7 @@ typedef struct {
 
 typedef struct {
     Sp_Cmds cmds;
-} Sp_CmdBatch;
+} Sp_Batch;
 
 // Add a single arg to cmd.
 SPDEF void sp_cmd_add_arg(Sp_Cmd *cmd, const char *arg) SP_NOEXCEPT;
@@ -267,15 +267,15 @@ SPDEF void sp_proc_detach(Sp_Proc *proc) SP_NOEXCEPT;
 SPDEF int sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT;
 
 // Add finished cmd object to batch. cmd is copied into batch, and can safely be reset/freed.
-SPDEF int sp_batch_add_cmd(Sp_CmdBatch *batch, const Sp_Cmd *cmd) SP_NOEXCEPT;
+SPDEF int sp_batch_add_cmd(Sp_Batch *batch, const Sp_Cmd *cmd) SP_NOEXCEPT;
 // Run all processes in batch concurrently, with no more than max_parallel processes
 // running at any one time. Aborts early if any process fails. Returns exit code
 // of first failed process, or 0 if all succeeded.
-SPDEF int sp_batch_exec_sync(Sp_CmdBatch *batch, size_t max_parallel) SP_NOEXCEPT;
+SPDEF int sp_batch_exec_sync(Sp_Batch *batch, size_t max_parallel) SP_NOEXCEPT;
 // Resets batch object for reuse without deallocating internal memory
-SPDEF void sp_batch_reset(Sp_CmdBatch *batch) SP_NOEXCEPT;
+SPDEF void sp_batch_reset(Sp_Batch *batch) SP_NOEXCEPT;
 // Resets and frees batch object and its owned memory.
-SPDEF void sp_batch_free(Sp_CmdBatch *batch) SP_NOEXCEPT;
+SPDEF void sp_batch_free(Sp_Batch *batch) SP_NOEXCEPT;
 
 
 // Returns the BSD-3-Clause license text of sp.h as a NUL-terminated C string.
@@ -936,7 +936,7 @@ sp_cmd_free(Sp_Cmd *cmd) SP_NOEXCEPT
 }
 
 SPDEF int
-sp_batch_add_cmd(Sp_CmdBatch  *batch,
+sp_batch_add_cmd(Sp_Batch     *batch,
                  const Sp_Cmd *cmd) SP_NOEXCEPT
 {
     SP_ASSERT(batch);
@@ -951,7 +951,7 @@ sp_batch_add_cmd(Sp_CmdBatch  *batch,
 }
 
 SPDEF void
-sp_batch_reset(Sp_CmdBatch *batch) SP_NOEXCEPT
+sp_batch_reset(Sp_Batch *batch) SP_NOEXCEPT
 {
     if (!batch) return;
 
@@ -963,13 +963,13 @@ sp_batch_reset(Sp_CmdBatch *batch) SP_NOEXCEPT
 }
 
 SPDEF void
-sp_batch_free(Sp_CmdBatch *batch) SP_NOEXCEPT
+sp_batch_free(Sp_Batch *batch) SP_NOEXCEPT
 {
     if (!batch) return;
 
     sp_batch_reset(batch);
     sp_darray_free(&batch->cmds);
-    memset(batch, 0, sizeof(Sp_CmdBatch));
+    memset(batch, 0, sizeof(Sp_Batch));
 }
 
 /**
@@ -2241,8 +2241,8 @@ sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT
 
 
 SPDEF int
-sp_batch_exec_sync(Sp_CmdBatch  *batch,
-                   size_t        max_parallel) SP_NOEXCEPT
+sp_batch_exec_sync(Sp_Batch *batch,
+                   size_t    max_parallel) SP_NOEXCEPT
 {
     if (!batch) return -1;
 

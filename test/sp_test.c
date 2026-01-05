@@ -787,8 +787,8 @@ MT_DEFINE_TEST(batch_exec_sync_fail_fast_sequential)
     (void)remove(p2);
     (void)remove(p3);
 
-    Sp_CmdBatch batch = SP_ZERO_INIT;
-    Sp_Cmd      cmd   = SP_ZERO_INIT;
+    Sp_Batch batch = SP_ZERO_INIT;
+    Sp_Cmd   cmd   = SP_ZERO_INIT;
 
     sp_cmd_reset(&cmd);
     sp_cmd_redirect_stdin_null(&cmd);
