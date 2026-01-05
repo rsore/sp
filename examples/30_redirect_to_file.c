@@ -28,7 +28,7 @@ main(int    argc,
         return child_main();
     }
 
-    Sp_Cmd cmd = {0};
+    Sp_Cmd cmd = sp_cmd_init();
 
     // stdout/stderr -> separate files
     sp_cmd_add_args(&cmd, argv[0], "--child");

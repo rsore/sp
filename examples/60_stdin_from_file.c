@@ -48,7 +48,7 @@ main(int    argc,
     fclose(f);
 
     // Spawn child with stdin redirected from that file.
-    Sp_Cmd cmd = {0};
+    Sp_Cmd cmd = sp_cmd_init();
     sp_cmd_add_args(&cmd, argv[0], "--child");
     sp_cmd_redirect_stdin_from_file(&cmd, path);
 

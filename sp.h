@@ -108,10 +108,11 @@
 extern "C" {
 #endif
 
-#define SP_LOG_LEVEL_ECHO_CMD 0x01 // Commands as strings as they are executed
-#define SP_LOG_LEVEL_INFO     0x02
-#define SP_LOG_LEVEL_WARNING  0x04
-#define SP_LOG_LEVEL_ERROR    0x08
+#define SP_LOG_LEVEL_ECHO_CMD 0x01u // Commands as strings as they are executed
+#define SP_LOG_LEVEL_INFO     0x02u
+#define SP_LOG_LEVEL_WARNING  0x04u
+#define SP_LOG_LEVEL_ERROR    0x08u
+#define SP_LOG_LEVEL_ALL      (SP_LOG_LEVEL_ECHO_CMD | SP_LOG_LEVEL_INFO | SP_LOG_LEVEL_WARNING | SP_LOG_LEVEL_ERROR)
 
 #if defined(SP_USE_SIMPLE_LOGGER) && !defined(SP_LOG)
 #define SP_LOG(level, msg)    \
@@ -120,6 +121,8 @@ extern "C" {
         fputc('\n',  stderr); \
     } while (0)
 #endif
+
+typedef void (*Sp_LogFn)(unsigned int level, const char *msg, void *user_data);
 
 typedef struct {
     char   *buffer;
@@ -182,6 +185,10 @@ typedef struct {
     size_t internal_strings_already_initted; // We reuse allocated strings after cmd_reset
 
     Sp_Stdio stdio;
+
+    Sp_LogFn      log_fn;
+    void         *log_user_data;
+    unsigned int  log_level_mask;
 } Sp_Cmd;
 
 // Dynamic array
@@ -207,7 +214,16 @@ typedef struct {
 
 typedef struct {
     Sp_Cmds cmds;
+
+    Sp_LogFn      log_fn;
+    void         *log_user_data;
+
+    unsigned int  log_level_mask;
+    int           log_level_mask_defined;
 } Sp_Batch;
+
+// Initializes a default cmd
+SPDEF Sp_Cmd sp_cmd_init(void) SP_NOEXCEPT;
 
 // Add a single arg to cmd.
 SPDEF void sp_cmd_add_arg(Sp_Cmd *cmd, const char *arg) SP_NOEXCEPT;
@@ -247,9 +263,15 @@ SPDEF void sp_cmd_redirect_stdin_pipe(Sp_Cmd *cmd, Sp_Pipe *out_write) SP_NOEXCE
 SPDEF void sp_cmd_redirect_stdout_pipe(Sp_Cmd *cmd, Sp_Pipe *out_read) SP_NOEXCEPT; // parent reads  <- child stdout. *out_read  becomes valid after successful exec
 SPDEF void sp_cmd_redirect_stderr_pipe(Sp_Cmd *cmd, Sp_Pipe *out_read) SP_NOEXCEPT; // parent reads  <- child stderr. *out_read  becomes valid after successful exec
 
+// Sets a custom logger for this command. This overrides SP_LOG() for this command
+// if SP_LOG() is defined.
+SPDEF void sp_cmd_set_logger(Sp_Cmd *cmd, Sp_LogFn logger, void *user_data) SP_NOEXCEPT;
+// Sets a log mask to filter specific log levels. Default is SP_LOG_LEVEL_ALL
+SPDEF void sp_cmd_set_log_mask(Sp_Cmd *cmd, unsigned int mask) SP_NOEXCEPT;
+
 // Resets to no args, but does not free underlying memory
 SPDEF void sp_cmd_reset(Sp_Cmd *cmd) SP_NOEXCEPT;
-// Resets cmd, and frees underlying memory
+// Resets cmd, frees underlying memory, and zeros cmd object
 SPDEF void sp_cmd_free(Sp_Cmd *cmd) SP_NOEXCEPT;
 
 // Run cmd asynchronously in a subprocess, returns process handle.
@@ -266,8 +288,23 @@ SPDEF void sp_proc_detach(Sp_Proc *proc) SP_NOEXCEPT;
 // Wait for subprocess in flight to exit, returning its exit code
 SPDEF int sp_proc_wait(Sp_Proc *proc) SP_NOEXCEPT;
 
+// Initializes a default batch.
+SPDEF Sp_Batch sp_batch_init(void) SP_NOEXCEPT;
+
 // Add finished cmd object to batch. cmd is copied into batch, and can safely be reset/freed.
 SPDEF int sp_batch_add_cmd(Sp_Batch *batch, const Sp_Cmd *cmd) SP_NOEXCEPT;
+
+// Sets a custom logger for all commands that are part to this batch. Propagates
+// both logger function and user data. Overrides any custom logger and user data
+// already set in cmd. Sets the logger for all commands already in the batch,
+// and all future commands added to the batch.
+SPDEF void sp_batch_set_logger(Sp_Batch *batch, Sp_LogFn logger, void *user_data);
+
+// Sets a log mask that is propagated to all commands that are part of this batch.
+// Overrides any log mask already defined in cmd. Sets the log mask for all commands
+// already in the batch, and all future commands added to the batch.
+SPDEF void sp_batch_set_log_mask(Sp_Batch *batch, unsigned int mask);
+
 // Run all processes in batch concurrently, with no more than max_parallel processes
 // running at any one time. Aborts early if any process fails. Returns exit code
 // of first failed process, or 0 if all succeeded.
@@ -330,7 +367,7 @@ SPDEF const char *sp_license_text(void) SP_NOEXCEPT;
 #endif
 
 
-static inline void sp_internal_log(int level, const char *fmt, ...);
+static inline void sp_internal_log(unsigned int level, const char *fmt, ...);
 
 /**
  * Dynamic array implementation
@@ -383,9 +420,6 @@ sp_internal_strdup(const char *str)
     buf[len] = '\0';
     return buf;
 }
-
-#define SP_INTERNAL_STRING_FMT_STR(str) "%.*s"
-#define SP_INTERNAL_STRING_FMT_ARG(str) (int)(str).size, (str).buffer
 
 static inline void
 sp_internal_string_ensure_null(Sp_String *str)
@@ -541,7 +575,7 @@ sp_internal_sprint(const char *fmt, ...)
 
 
 static inline const char *
-sp_log_level_to_str(int level)
+sp_log_level_to_str(unsigned int level)
 {
     switch (level)
     {
@@ -553,25 +587,97 @@ sp_log_level_to_str(int level)
     return "UNKNOWN_LOG_LEVEL";
 }
 
+
+
+
+// sp_internal_log.c (or inside your sp.h)
+
 static inline void
-sp_internal_log(int          level,
-                const char  *fmt,
-                ...)
+sp_internal_log_va(unsigned int level, const char *fmt, va_list ap)
 {
-    // Maybe unused
-    (void)fmt;
+    // Silence warnings when logging is compiled out
     (void)level;
+    (void)fmt;
+    (void)ap;
 
 #ifdef SP_LOG
-    va_list ap;
-    va_start(ap, fmt);
+    // If sp_internal_vsprint consumes ap, that’s fine because we only use it once here.
     Sp_String s = sp_internal_vsprint(fmt, ap);
-    va_end(ap);
     SP_LOG(level, s.buffer);
     sp_internal_string_free(&s);
 #endif
 }
 
+static inline void
+sp_internal_log(unsigned int level, const char *fmt, ...)
+{
+    // Silence warnings when logging is compiled out
+    (void)level;
+    (void)fmt;
+
+#ifdef SP_LOG
+    va_list ap;
+    va_start(ap, fmt);
+    sp_internal_log_va(level, fmt, ap);
+    va_end(ap);
+#endif
+}
+
+static inline void
+sp_internal_cmd_log_va(const Sp_Cmd *cmd, unsigned int level, const char *fmt, va_list ap)
+{
+    // Silence warnings when logging is compiled out
+    (void)cmd;
+    (void)level;
+    (void)fmt;
+    (void)ap;
+
+    // cmd is expected non-NULL and cmd->log_fn non-NULL when this is called.
+    Sp_String s = sp_internal_vsprint(fmt, ap);
+    cmd->log_fn(level, s.buffer, cmd->log_user_data);
+    sp_internal_string_free(&s);
+}
+
+static inline void
+sp_internal_cmd_log_impl(const Sp_Cmd *cmd, unsigned int level, const char *fmt, ...)
+{
+    // Silence warnings when logging is compiled out
+    (void)cmd;
+    (void)level;
+    (void)fmt;
+
+    va_list ap;
+    va_start(ap, fmt);
+    sp_internal_cmd_log_va(cmd, level, fmt, ap);
+    va_end(ap);
+}
+
+#define sp_internal_cmd_log0(cmd_ptr, level, msg)                         \
+    do {                                                                  \
+        if (!(cmd_ptr)) {                                                 \
+            sp_internal_log((level), "%s", (msg));                        \
+        } else if ((cmd_ptr)->log_level_mask & (level)) {                 \
+            if ((cmd_ptr)->log_fn) {                                      \
+                sp_internal_cmd_log_impl((cmd_ptr), (level), "%s", (msg));\
+            } else {                                                      \
+                sp_internal_log((level), "%s", (msg));                    \
+            }                                                             \
+        }                                                                 \
+    } while (0)
+
+#define sp_internal_cmd_logf(cmd_ptr, level, fmt, ...)                    \
+    do {                                                                  \
+        if (!(cmd_ptr)) {                                                 \
+            sp_internal_log((level), (fmt), __VA_ARGS__);                 \
+        } else if ((cmd_ptr)->log_level_mask & (level)) {                 \
+            if ((cmd_ptr)->log_fn) {                                      \
+                sp_internal_cmd_log_impl((cmd_ptr), (level), (fmt),       \
+                                         __VA_ARGS__);                    \
+            } else {                                                      \
+                sp_internal_log((level), (fmt), __VA_ARGS__);             \
+            }                                                             \
+        }                                                                 \
+    } while (0)
 
 static inline void
 sp_internal_proc_handle_store_by_bytes(Sp_Proc     *proc,
@@ -736,7 +842,7 @@ sp_internal_cmd_clone(Sp_Cmd        *dst,
     if ((src->stdio.stdin_redir.kind  == SP_REDIR_PIPE) ||
         (src->stdio.stdout_redir.kind == SP_REDIR_PIPE) ||
         (src->stdio.stderr_redir.kind == SP_REDIR_PIPE)) {
-        sp_internal_log(SP_LOG_LEVEL_ERROR, "Cannot clone Sp_Cmd object with pipe, pipes are unique");
+        sp_internal_cmd_log0(src, SP_LOG_LEVEL_ERROR, "Cannot clone Sp_Cmd object with pipe, pipes are unique");
         SP_ASSERT(0);
         return 0;
     }
@@ -750,11 +856,23 @@ sp_internal_cmd_clone(Sp_Cmd        *dst,
 
     dst->internal_strings_already_initted = dst->args.size;
 
+    dst->log_fn         = src->log_fn;
+    dst->log_user_data  = src->log_user_data;
+    dst->log_level_mask = src->log_level_mask;
+
     return_val = sp_internal_redirect_clone(&dst->stdio.stdin_redir,  &src->stdio.stdin_redir)  && return_val;
     return_val = sp_internal_redirect_clone(&dst->stdio.stdout_redir, &src->stdio.stdout_redir) && return_val;
     return_val = sp_internal_redirect_clone(&dst->stdio.stderr_redir, &src->stdio.stderr_redir) && return_val;
 
     return return_val;
+}
+
+SPDEF Sp_Cmd
+sp_cmd_init(void) SP_NOEXCEPT
+{
+    Sp_Cmd cmd = SP_ZERO_INIT;
+    cmd.log_level_mask = SP_LOG_LEVEL_ALL;
+    return cmd;
 }
 
 SPDEF void
@@ -773,9 +891,9 @@ sp_cmd_add_arg(Sp_Cmd      *cmd,
 }
 
 SPDEF void
-sp_cmd_add_args_impl_(Sp_Cmd         *cmd,
-                         const char *new_arg1,
-                                     ...) SP_NOEXCEPT
+sp_cmd_add_args_impl_(Sp_Cmd     *cmd,
+                      const char *new_arg1,
+                      ...) SP_NOEXCEPT
 {
     SP_ASSERT(cmd);
 
@@ -897,6 +1015,24 @@ sp_cmd_redirect_stderr_pipe(Sp_Cmd *cmd, Sp_Pipe *out_read) SP_NOEXCEPT
     cmd->stdio.stderr_redir.out_pipe = out_read;
 }
 
+SPDEF void
+sp_cmd_set_logger(Sp_Cmd   *cmd,
+                  Sp_LogFn  logger,
+                  void     *user_data) SP_NOEXCEPT
+{
+    if (!cmd || !logger) return;
+    cmd->log_fn = logger;
+    cmd->log_user_data = user_data;
+}
+
+SPDEF void
+sp_cmd_set_log_mask(Sp_Cmd      *cmd,
+                    unsigned int mask) SP_NOEXCEPT
+{
+    if (!cmd) return;
+    cmd->log_level_mask = mask;
+}
+
 SPDEF int
 sp_cmd_exec_sync(Sp_Cmd *cmd) SP_NOEXCEPT
 {
@@ -933,7 +1069,17 @@ sp_cmd_free(Sp_Cmd *cmd) SP_NOEXCEPT
     sp_internal_redirect_free_alloc(&cmd->stdio.stdin_redir);
     sp_internal_redirect_free_alloc(&cmd->stdio.stdout_redir);
     sp_internal_redirect_free_alloc(&cmd->stdio.stderr_redir);
+
+    memset(cmd, 0, sizeof(*cmd));
 }
+
+SPDEF Sp_Batch
+sp_batch_init(void) SP_NOEXCEPT
+{
+    Sp_Batch batch = SP_ZERO_INIT;
+    return batch;
+}
+
 
 SPDEF int
 sp_batch_add_cmd(Sp_Batch     *batch,
@@ -945,10 +1091,50 @@ sp_batch_add_cmd(Sp_Batch     *batch,
     Sp_Cmd copy = SP_ZERO_INIT;
     if (!sp_internal_cmd_clone(&copy, cmd)) return 0;
 
+    if (batch->log_fn) {
+        copy.log_fn = batch->log_fn;
+        copy.log_user_data = batch->log_user_data;
+    }
+
+    if (batch->log_level_mask_defined) {
+        copy.log_level_mask = batch->log_level_mask;
+    }
+
     sp_darray_append(&batch->cmds, copy);
 
     return 1;
 }
+
+
+SPDEF void
+sp_batch_set_logger(Sp_Batch *batch,
+                    Sp_LogFn  logger,
+                    void     *user_data)
+{
+    if (!batch) return;
+    batch->log_fn = logger;
+    batch->log_user_data = user_data;
+
+    for (size_t i = 0; i < batch->cmds.size; ++i) {
+        Sp_Cmd *cmd = &batch->cmds.buffer[i];
+        sp_cmd_set_logger(cmd, logger, user_data);
+    }
+}
+
+SPDEF void
+sp_batch_set_log_mask(Sp_Batch     *batch,
+                      unsigned int  mask)
+{
+    if (!batch) return;
+    batch->log_level_mask         = mask;
+    batch->log_level_mask_defined = 1;
+
+    for (size_t i = 0; i < batch->cmds.size; ++i) {
+        Sp_Cmd *cmd = &batch->cmds.buffer[i];
+        sp_cmd_set_log_mask(cmd, mask);
+    }
+}
+
 
 SPDEF void
 sp_batch_reset(Sp_Batch *batch) SP_NOEXCEPT
@@ -1282,7 +1468,7 @@ sp_internal_win32_make_pipe(HANDLE *out_parent_end,
 
 static inline int
 sp_internal_win32_proc_is_done(Sp_Proc  *proc,
-                               int    *out_exit_code)
+                               int      *out_exit_code)
 {
     SP_ASSERT(proc);
     SP_ASSERT(out_exit_code);
@@ -1557,7 +1743,8 @@ sp_cmd_exec_async(Sp_Cmd *cmd) SP_NOEXCEPT
     cmd_quoted = sp_internal_win32_quote_cmd(cmd);
     SP_ASSERT(cmd_quoted.size < 32768 && "sp: Windows requires command line (incl NUL) < 32767 chars");
 
-    sp_internal_log(SP_LOG_LEVEL_ECHO_CMD, SP_INTERNAL_STRING_FMT_STR(cmd_quoted), SP_INTERNAL_STRING_FMT_ARG(cmd_quoted));
+
+    sp_internal_cmd_logf(cmd, SP_LOG_LEVEL_ECHO_CMD, "%.*s", (int)cmd_quoted.size, cmd_quoted.buffer);
 
     success = CreateProcessA(NULL,
                              cmd_quoted.buffer,
@@ -2101,8 +2288,9 @@ sp_cmd_exec_async(Sp_Cmd *cmd) SP_NOEXCEPT
         goto fail;
     }
 
+
     quoted = sp_internal_posix_quote_cmd(cmd);
-    sp_internal_log(SP_LOG_LEVEL_ECHO_CMD, SP_INTERNAL_STRING_FMT_STR(quoted), SP_INTERNAL_STRING_FMT_ARG(quoted));
+    sp_internal_cmd_logf(cmd, SP_LOG_LEVEL_ECHO_CMD, "%.*s", (int)quoted.size, quoted.buffer);
     sp_internal_string_free(&quoted);
 
     pid = fork();

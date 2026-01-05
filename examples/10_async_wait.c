@@ -25,7 +25,7 @@ main(int    argc,
         return child_main(id);
     }
 
-    Sp_Cmd cmd = {0};
+    Sp_Cmd cmd = sp_cmd_init();
     sp_cmd_add_args(&cmd, argv[0], "--child", "A");
     // Start first process
     Sp_Proc a = sp_cmd_exec_async(&cmd);

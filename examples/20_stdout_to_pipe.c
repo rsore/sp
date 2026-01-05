@@ -26,7 +26,7 @@ main(int    argc,
         return child_main();
     }
 
-    Sp_Cmd  cmd = {0};
+    Sp_Cmd  cmd = sp_cmd_init();
     Sp_Pipe out = {0};
 
     sp_cmd_add_args(&cmd, argv[0], "--child");

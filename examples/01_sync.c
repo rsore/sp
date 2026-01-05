@@ -27,7 +27,7 @@ main(int    argc,
     // child_main() will be called when program is run with --child
     if (argc > 1 && strcmp(argv[1], "--child") == 0) return child_main();
 
-    Sp_Cmd cmd = {0};
+    Sp_Cmd cmd = sp_cmd_init();
     // Re-run this executable as a child process
     sp_cmd_add_args(&cmd, argv[0], "--child");
     int exit_code = sp_cmd_exec_sync(&cmd);
