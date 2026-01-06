@@ -6,7 +6,7 @@
     do {                                        \
         if  (level == SP_LOG_LEVEL_ECHO_CMD) {  \
             printf("CMD: %s\n", msg);           \
-            return;                             \
+            break;                              \
         }                                       \
         fputs(msg, stderr);                     \
                                                 \
